@@ -1,0 +1,42 @@
+services:
+
+  # ── Node.js API ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    container_name: pool-backend
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - SL_IP=${SL_IP:-}        # from .env — leave blank for auto-discovery
+      - SL_PORT=${SL_PORT:-80}
+    # Host network mode lets the backend send UDP broadcasts
+    # for ScreenLogic auto-discovery on your LAN.
+    # If you set SL_IP manually you can change this to "bridge".
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── React frontend + nginx ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+    container_name: pool-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"       # Access the app at http://<your-vm-ip>
+    extra_hosts:
+      # Since backend uses host networking, reach it via the host's loopback
+      - "backend:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
