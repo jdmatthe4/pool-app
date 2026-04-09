@@ -5,17 +5,25 @@ const API = process.env.REACT_APP_API_URL || '';
 const HEAT_MODES = ['Off', 'Solar', 'Solar Preferred', 'Heater', 'Dual Heat'];
 
 const LIGHT_COMMANDS = [
-  { label: 'Off',        cmd: 0, color: '#555' },
-  { label: 'On',         cmd: 1, color: '#f5c842' },
-  { label: 'Color Set',  cmd: 2, color: '#a78bfa' },
-  { label: 'Color Sync', cmd: 3, color: '#60a5fa' },
-  { label: 'Party',      cmd: 5, color: '#f472b6' },
-  { label: 'Romance',    cmd: 6, color: '#fb923c' },
-  { label: 'Caribbean',  cmd: 7, color: '#34d399' },
-  { label: 'American',   cmd: 8, color: '#ef4444' },
-  { label: 'Sunset',     cmd: 9, color: '#f59e0b' },
-  { label: 'Royal',      cmd: 10, color: '#818cf8' },
+  { label: 'Off',        cmd: 0, color: '#64748b', icon: '\u25CB' },
+  { label: 'On',         cmd: 1, color: '#facc15', icon: '\u2600' },
+  { label: 'Color Set',  cmd: 2, color: '#a78bfa', icon: '\u25C9' },
+  { label: 'Color Sync', cmd: 3, color: '#60a5fa', icon: '\u21BB' },
+  { label: 'Party',      cmd: 5, color: '#f472b6', icon: '\u2605' },
+  { label: 'Romance',    cmd: 6, color: '#fb923c', icon: '\u2665' },
+  { label: 'Caribbean',  cmd: 7, color: '#34d399', icon: '\u223F' },
+  { label: 'American',   cmd: 8, color: '#ef4444', icon: '\u2691' },
+  { label: 'Sunset',     cmd: 9, color: '#f59e0b', icon: '\u263C' },
+  { label: 'Royal',      cmd: 10, color: '#818cf8', icon: '\u2654' },
 ];
+
+const NAV_ICONS = {
+  dashboard: '\u25A3',
+  'pool controls': '\u26A1',
+  lights: '\u2738',
+  schedules: '\u23F0',
+  alerts: '\u26A0',
+};
 
 function usePoll(fn, ms) {
   useEffect(() => {
@@ -38,110 +46,70 @@ async function apiPost(path, body) {
   return r.json();
 }
 
-function TempRing({ temp, setPoint, label, isActive }) {
-  const max = 104, min = 50;
-  const pct = Math.max(0, Math.min(1, (temp - min) / (max - min)));
-  const r = 48, cx = 60, cy = 60;
+/* ── Gauge Component ── */
+function TempGauge({ temp, setPoint, label, isOn }) {
+  const min = 40, max = 104;
+  const pct = Math.max(0, Math.min(1, ((temp || 0) - min) / (max - min)));
+  const r = 54, cx = 64, cy = 64, sw = 6;
   const circ = 2 * Math.PI * r;
-  const dash = pct * circ * 0.75;
-  const spPct = Math.max(0, Math.min(1, (setPoint - min) / (max - min)));
-  const angle = -225 + spPct * 270;
-  const rad = (angle * Math.PI) / 180;
-  const spX = cx + (r + 2) * Math.cos(rad);
-  const spY = cy + (r + 2) * Math.sin(rad);
+  const arc = 0.75;
+  const dash = pct * circ * arc;
+  const color = isOn ? '#22d3ee' : (temp > 80 ? '#f59e0b' : '#3b82f6');
 
   return (
-    <div style={{ textAlign: 'center' }}>
-      <svg width="120" height="120" style={{ overflow: 'visible' }}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8"
-          strokeDasharray={`${circ * 0.75} ${circ * 0.25}`}
-          strokeDashoffset={circ * 0.125}
-          strokeLinecap="round" />
-        <circle cx={cx} cy={cy} r={r} fill="none"
-          stroke={isActive ? '#38bdf8' : 'rgba(255,255,255,0.2)'} strokeWidth="8"
+    <div style={{ position: 'relative', width: 128, height: 128 }}>
+      <svg width="128" height="128" style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={`g-${label}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="1" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.3" />
+          </linearGradient>
+        </defs>
+        {/* track */}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={sw}
+          strokeDasharray={`${circ * arc} ${circ * (1 - arc)}`}
+          strokeDashoffset={circ * (arc / 2 + 0.25)} strokeLinecap="round"
+          transform={`rotate(0 ${cx} ${cy})`} />
+        {/* fill */}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={`url(#g-${label})`} strokeWidth={sw}
           strokeDasharray={`${dash} ${circ - dash}`}
-          strokeDashoffset={circ * 0.125}
-          strokeLinecap="round"
-          style={{ transition: 'all 0.8s ease' }} />
-        <circle cx={spX} cy={spY} r="4" fill="#f59e0b" opacity="0.9" />
-        <text x={cx} y={cy - 8} textAnchor="middle" fill="white" fontSize="22" fontWeight="600"
-          fontFamily="DM Sans, sans-serif">{temp ?? '--'}°</text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11"
-          fontFamily="DM Sans, sans-serif">{label}</text>
-        <text x={cx} y={cy + 28} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="10"
-          fontFamily="DM Mono, monospace">sp {setPoint ?? '--'}°</text>
+          strokeDashoffset={circ * (arc / 2 + 0.25)} strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray 0.8s ease', filter: `drop-shadow(0 0 4px ${color}40)` }} />
       </svg>
-    </div>
-  );
-}
-
-function CircuitButton({ circuit, onToggle, loading }) {
-  const on = circuit.isOn;
-  return (
-    <button onClick={() => onToggle(circuit.id, on ? 0 : 1)} disabled={loading}
-      style={{
-        background: on ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.04)',
-        border: on ? '1px solid rgba(56,189,248,0.4)' : '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '10px',
-        padding: '12px 14px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        transition: 'all 0.2s ease',
-        opacity: loading ? 0.6 : 1,
-        width: '100%',
-      }}>
-      <span style={{
-        width: 10, height: 10, borderRadius: '50%',
-        background: on ? '#38bdf8' : 'rgba(255,255,255,0.2)',
-        boxShadow: on ? '0 0 6px #38bdf8' : 'none',
-        flexShrink: 0,
-        transition: 'all 0.2s',
-      }} />
-      <span style={{ color: on ? 'white' : 'rgba(255,255,255,0.5)', fontSize: 13,
-        fontFamily: 'DM Sans', fontWeight: on ? 500 : 400 }}>
-        {circuit.name}
-      </span>
-    </button>
-  );
-}
-
-function ChemRow({ label, value, unit, low, high, ideal }) {
-  const inRange = value >= low && value <= high;
-  const pct = Math.max(0, Math.min(1, (value - low) / (high - low)));
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, fontFamily: 'DM Sans' }}>{label}</span>
-        <span style={{ color: inRange ? '#4ade80' : '#f87171', fontSize: 13, fontFamily: 'DM Mono', fontWeight: 500 }}>
-          {value ?? '--'} {unit}
-        </span>
-      </div>
-      <div style={{ height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, position: 'relative' }}>
-        <div style={{
-          position: 'absolute', left: `${pct * 100}%`, top: -2, width: 8, height: 8,
-          background: inRange ? '#4ade80' : '#f87171', borderRadius: '50%', transform: 'translateX(-50%)',
-          transition: 'left 0.6s ease',
-        }} />
-        <div style={{
-          position: 'absolute', left: '25%', right: '25%', top: 0, height: 4,
-          background: 'rgba(74,222,128,0.2)', borderRadius: 2,
-        }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 28, fontWeight: 700, color: 'white', fontFamily: "'JetBrains Mono', monospace",
+          lineHeight: 1 }}>{temp ?? '--'}</span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+          marginTop: 2 }}>SET {setPoint ?? '--'}&deg;F</span>
       </div>
     </div>
   );
 }
 
+/* ── Metric Card ── */
+function Metric({ label, value, unit, color }) {
+  return (
+    <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.025)', borderRadius: 8,
+      border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 600, color: color || 'white',
+        fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>
+        {value}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 3 }}>{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Toast ── */
 function Toast({ message, type }) {
   return (
-    <div style={{
-      position: 'fixed', bottom: 24, right: 24,
-      background: type === 'error' ? '#ef4444' : '#0ea5e9',
-      color: 'white', padding: '10px 18px', borderRadius: 10,
-      fontSize: 13, fontFamily: 'DM Sans', boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-      zIndex: 999, animation: 'fadeIn 0.2s ease',
-    }}>
+    <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+      background: type === 'error' ? 'rgba(239,68,68,0.95)' : 'rgba(14,165,233,0.95)',
+      color: 'white', padding: '10px 24px', borderRadius: 8, fontSize: 13,
+      fontFamily: "'Inter', sans-serif", boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      backdropFilter: 'blur(12px)', zIndex: 999, animation: 'slideUp 0.25s ease' }}>
       {message}
     </div>
   );
@@ -149,7 +117,8 @@ function Toast({ message, type }) {
 
 export default function App() {
   const [status, setStatus] = useState(null);
-  const [chemistry, setChemistry] = useState(null);
+  const [alertsData, setAlertsData] = useState(null);
+  const [schedulesData, setSchedulesData] = useState(null);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState({});
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -165,18 +134,26 @@ export default function App() {
     try {
       const r = await apiGet('status');
       if (r.ok) { setStatus(r.data); setLastUpdated(new Date()); }
-    } catch (e) { /* silently fail on poll */ }
+    } catch (e) {}
   }, []);
 
-  const fetchChemistry = useCallback(async () => {
+  const fetchAlerts = useCallback(async () => {
     try {
-      const r = await apiGet('chemistry');
-      if (r.ok) setChemistry(r.data);
+      const r = await apiGet('alerts');
+      if (r.ok) setAlertsData(r.data);
+    } catch (e) {}
+  }, []);
+
+  const fetchSchedules = useCallback(async () => {
+    try {
+      const r = await apiGet('schedules');
+      if (r.ok) setSchedulesData(r.data);
     } catch (e) {}
   }, []);
 
   usePoll(fetchStatus, 5000);
-  usePoll(fetchChemistry, 30000);
+  usePoll(fetchAlerts, 10000);
+  usePoll(fetchSchedules, 15000);
 
   const toggleCircuit = async (circuitId, state) => {
     setLoading(l => ({ ...l, [circuitId]: true }));
@@ -198,7 +175,7 @@ export default function App() {
 
   const setSetPoint = async (bodyId) => {
     const temp = parseInt(tempInputs[bodyId]);
-    if (!temp || temp < 50 || temp > 104) return showToast('Temperature must be 50–104°F', 'error');
+    if (!temp || temp < 50 || temp > 104) return showToast('Temperature must be 50-104\u00B0F', 'error');
     try {
       const r = await apiPost('setpoint', { bodyId, temperature: temp });
       if (r.ok) { showToast(r.message); fetchStatus(); }
@@ -210,261 +187,523 @@ export default function App() {
     setLoading(l => ({ ...l, lights: true }));
     try {
       const r = await apiPost('lights', { command: cmd });
-      if (r.ok) showToast(`Lights: ${r.message}`);
+      if (r.ok) showToast(r.message);
       else showToast(r.error, 'error');
     } catch (e) { showToast('Connection error', 'error'); }
     setLoading(l => ({ ...l, lights: false }));
   };
 
-  const bg = `
-    radial-gradient(ellipse at 20% 80%, rgba(14,165,233,0.12) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.08) 0%, transparent 50%),
-    #080e1a
-  `;
+  const pool = status?.bodies?.find(b => b.name === 'Pool');
+  const circuits = status?.circuits ?? [];
+  const activeAlerts = alertsData?.alerts || [];
+  const chlor = alertsData?.chlorinator || {};
+  const sys = alertsData?.system || {};
+  const alertCount = activeAlerts.length;
 
-  const card = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 16,
-    padding: '20px 24px',
-    backdropFilter: 'blur(8px)',
+  const sevColors = {
+    alarm: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)', dot: '#ef4444', text: '#fca5a5' },
+    warning: { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)', dot: '#f59e0b', text: '#fcd34d' },
+    info: { bg: 'rgba(56,189,248,0.08)', border: 'rgba(56,189,248,0.25)', dot: '#38bdf8', text: '#7dd3fc' },
+    ok: { bg: 'rgba(74,222,128,0.06)', border: 'rgba(74,222,128,0.2)', dot: '#4ade80', text: '#86efac' },
   };
 
-  const tab = (id, label) => ({
-    background: activeTab === id ? 'rgba(56,189,248,0.15)' : 'transparent',
-    border: activeTab === id ? '1px solid rgba(56,189,248,0.3)' : '1px solid transparent',
-    color: activeTab === id ? '#38bdf8' : 'rgba(255,255,255,0.4)',
-    borderRadius: 8, padding: '7px 18px',
-    cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans', fontWeight: 500,
-    transition: 'all 0.2s',
-  });
-
-  const pool = status?.bodies?.find(b => b.id === 0);
-  const spa = status?.bodies?.find(b => b.id === 1);
-  const circuits = status?.circuits ?? [];
+  const inputStyle = {
+    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+    color: 'white', borderRadius: 6, padding: '8px 10px', fontSize: 12,
+    fontFamily: "'JetBrains Mono', monospace", outline: 'none',
+  };
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, padding: '24px', boxSizing: 'border-box',
-      fontFamily: 'DM Sans, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0f1a', display: 'flex',
+      fontFamily: "'Inter', -apple-system, sans-serif" }}>
       <style>{`
-        @keyframes fadeIn { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:translateY(0) } }
-        * { box-sizing: border-box; }
-        button:hover:not(:disabled) { filter: brightness(1.15); }
-        input { outline: none; }
-        select { outline: none; }
-        ::-webkit-scrollbar { width: 4px; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+        @keyframes slideUp { from { opacity:0; transform:translate(-50%,8px) } to { opacity:1; transform:translate(-50%,0) } }
+        @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
+        @keyframes glow { 0%,100% { box-shadow: 0 0 4px currentColor } 50% { box-shadow: 0 0 12px currentColor } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { margin: 0; background: #0a0f1a; }
+        button { cursor: pointer; }
+        button:hover:not(:disabled) { filter: brightness(1.1); }
+        input, select { outline: none; }
+        ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
       `}</style>
 
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-          <div>
-            <h1 style={{ color: 'white', fontSize: 24, fontWeight: 600, margin: 0, letterSpacing: '-0.5px' }}>
-              Pool Control
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, margin: '4px 0 0',
-              fontFamily: 'DM Mono' }}>
-              {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Connecting...'}
-            </p>
+      {/* ── Sidebar ── */}
+      <nav style={{
+        width: 220, minHeight: '100vh', padding: '20px 12px',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', flexDirection: 'column', flexShrink: 0,
+      }}>
+        {/* Logo area */}
+        <div style={{ padding: '8px 12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8,
+              background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, color: 'white' }}>{'\u223F'}</div>
+            <div>
+              <div style={{ color: 'white', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>Matthews</div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 500 }}>Pool Control</div>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['dashboard','circuits','chemistry','lights'].map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} style={tab(t, t)}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%',
+              background: status ? '#4ade80' : '#f59e0b',
+              boxShadow: status ? '0 0 6px #4ade80' : '0 0 6px #f59e0b' }} />
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)',
+              fontFamily: "'JetBrains Mono', monospace" }}>
+              {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Connecting...'}
+            </span>
           </div>
         </div>
 
-        {/* Dashboard Tab */}
+        {/* Nav items */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {['dashboard','pool controls','lights','schedules','alerts'].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              background: activeTab === t ? 'rgba(255,255,255,0.06)' : 'transparent',
+              border: 'none',
+              borderLeft: activeTab === t ? '2px solid #3b82f6' : '2px solid transparent',
+              color: activeTab === t ? 'white' : 'rgba(255,255,255,0.35)',
+              borderRadius: '0 6px 6px 0', padding: '10px 14px', textAlign: 'left',
+              fontSize: 13, fontWeight: activeTab === t ? 500 : 400,
+              transition: 'all 0.15s', width: '100%',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontSize: 14, width: 20, textAlign: 'center',
+                opacity: activeTab === t ? 1 : 0.5 }}>{NAV_ICONS[t]}</span>
+              {t.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+              {t === 'alerts' && alertCount > 0 && (
+                <span style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                  background: 'rgba(239,68,68,0.2)', color: '#fca5a5',
+                  fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{alertCount}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Bottom status */}
+        <div style={{ marginTop: 'auto', padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)',
+            fontFamily: "'JetBrains Mono', monospace" }}>
+            EasyTouch2 4P
+          </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)',
+            fontFamily: "'JetBrains Mono', monospace" }}>
+            IC40 &middot; v5.2 b738
+          </div>
+        </div>
+      </nav>
+
+      {/* ── Main Content ── */}
+      <main style={{ flex: 1, padding: '24px 32px', overflowY: 'auto', minHeight: '100vh' }}>
+        <div style={{ maxWidth: 1000 }}>
+
+        {/* ─── DASHBOARD ─── */}
         {activeTab === 'dashboard' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Pool body */}
-            {pool && (
-              <div style={card}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                  <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: 0 }}>Pool</h2>
-                  <span style={{
-                    fontSize: 11, padding: '3px 10px', borderRadius: 20,
-                    background: pool.isActive ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.06)',
-                    color: pool.isActive ? '#38bdf8' : 'rgba(255,255,255,0.3)',
-                    border: pool.isActive ? '1px solid rgba(56,189,248,0.3)' : '1px solid transparent',
-                  }}>
-                    {pool.isActive ? 'Active' : 'Standby'}
-                  </span>
+          <div>
+            {/* Top metrics row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+              <Metric label="Air Temp" value={sys.airTemp ?? '--'} unit="&deg;F" />
+              <Metric label="Pool Temp" value={pool?.currentTemp ?? '--'} unit="&deg;F"
+                color={pool?.currentTemp > 80 ? '#22d3ee' : undefined} />
+              <Metric label="Salt Level" value={chlor.salt ?? '--'} unit="ppm"
+                color={chlor.salt < 2700 ? '#fbbf24' : '#4ade80'} />
+              <Metric label="Chlor Output" value={chlor.poolSetPoint ?? '--'} unit="%" />
+            </div>
+
+            {/* Main grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+
+              {/* Pool gauge card */}
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 20 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>Pool</span>
+                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4,
+                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
+                    background: pool?.isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)',
+                    color: pool?.isActive ? '#22d3ee' : 'rgba(255,255,255,0.3)',
+                    border: `1px solid ${pool?.isActive ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                  }}>{pool?.isActive ? 'RUNNING' : 'STANDBY'}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-                  <TempRing temp={pool.currentTemp} setPoint={pool.setPoint} label="Pool" isActive={pool.isActive} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select value={pool.heatMode} onChange={e => setHeatMode(0, parseInt(e.target.value))}
-                    style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'white', borderRadius: 8, padding: '8px 10px', fontSize: 12,
-                      fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                {pool && <TempGauge temp={pool.currentTemp} setPoint={pool.setPoint} label="Pool" isOn={pool.isActive} />}
+                <div style={{ width: '100%', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <select value={pool?.heatMode ?? 0} onChange={e => setHeatMode(0, parseInt(e.target.value))}
+                    style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}>
                     {HEAT_MODES.map((m, i) => <option key={i} value={i}>{m}</option>)}
                   </select>
-                  <input type="number" min="50" max="104" placeholder="°F"
-                    value={tempInputs[0] ?? ''}
-                    onChange={e => setTempInputs(t => ({ ...t, 0: e.target.value }))}
-                    style={{ width: 60, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'white', borderRadius: 8, padding: '8px', fontSize: 12,
-                      fontFamily: 'DM Mono', textAlign: 'center' }} />
-                  <button onClick={() => setSetPoint(0)}
-                    style={{ background: '#0ea5e9', border: 'none', color: 'white',
-                      borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12,
-                      fontFamily: 'DM Sans', fontWeight: 500 }}>Set</button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input type="number" min="50" max="104" placeholder="Temp"
+                      value={tempInputs[0] ?? ''}
+                      onChange={e => setTempInputs(t => ({ ...t, 0: e.target.value }))}
+                      style={{ ...inputStyle, flex: 1, textAlign: 'center' }} />
+                    <button onClick={() => setSetPoint(0)}
+                      style={{ background: '#3b82f6', border: 'none', color: 'white',
+                        borderRadius: 6, padding: '8px 16px', fontSize: 12, fontWeight: 600 }}>SET</button>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Spa body */}
-            {spa && (
-              <div style={card}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                  <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: 0 }}>Spa</h2>
-                  <span style={{
-                    fontSize: 11, padding: '3px 10px', borderRadius: 20,
-                    background: spa.isActive ? 'rgba(251,146,60,0.15)' : 'rgba(255,255,255,0.06)',
-                    color: spa.isActive ? '#fb923c' : 'rgba(255,255,255,0.3)',
-                    border: spa.isActive ? '1px solid rgba(251,146,60,0.3)' : '1px solid transparent',
-                  }}>
-                    {spa.isActive ? 'Active' : 'Standby'}
-                  </span>
+              {/* Right column */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Alerts banner */}
+                <div style={{ background: alertCount > 0 ? 'rgba(239,68,68,0.06)' : 'rgba(74,222,128,0.04)',
+                  border: `1px solid ${alertCount > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(74,222,128,0.12)'}`,
+                  borderRadius: 10, padding: '12px 16px' }}>
+                  {alertCount === 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80',
+                        boxShadow: '0 0 6px #4ade80' }} />
+                      <span style={{ fontSize: 12, color: '#86efac', fontWeight: 500 }}>All systems nominal</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {activeAlerts.map((a, i) => {
+                        const sc = sevColors[a.severity] || sevColors.info;
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: sc.dot,
+                              animation: a.severity === 'alarm' ? 'pulse 1.5s ease infinite' : 'none', flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, color: sc.text, fontWeight: 500 }}>{a.source}: {a.message}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-                  <TempRing temp={spa.currentTemp} setPoint={spa.setPoint} label="Spa" isActive={spa.isActive} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select value={spa.heatMode} onChange={e => setHeatMode(1, parseInt(e.target.value))}
-                    style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'white', borderRadius: 8, padding: '8px 10px', fontSize: 12,
-                      fontFamily: 'DM Sans', cursor: 'pointer' }}>
-                    {HEAT_MODES.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                  </select>
-                  <input type="number" min="50" max="104" placeholder="°F"
-                    value={tempInputs[1] ?? ''}
-                    onChange={e => setTempInputs(t => ({ ...t, 1: e.target.value }))}
-                    style={{ width: 60, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'white', borderRadius: 8, padding: '8px', fontSize: 12,
-                      fontFamily: 'DM Mono', textAlign: 'center' }} />
-                  <button onClick={() => setSetPoint(1)}
-                    style={{ background: '#fb923c', border: 'none', color: 'white',
-                      borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12,
-                      fontFamily: 'DM Sans', fontWeight: 500 }}>Set</button>
+
+                {/* Quick circuits */}
+                <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: 12, padding: '16px 18px', flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12,
+                    fontFamily: "'JetBrains Mono', monospace" }}>Pool Controls</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+                    {circuits.filter(c => !c.isFeature).map(c => {
+                      const on = c.isOn;
+                      return (
+                        <button key={c.id} onClick={() => toggleCircuit(c.id, on ? 0 : 1)}
+                          disabled={loading[c.id]}
+                          style={{
+                            background: on ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${on ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                            borderRadius: 6, padding: '10px 12px',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            opacity: loading[c.id] ? 0.5 : 1, transition: 'all 0.15s',
+                          }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                            background: on ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                            boxShadow: on ? '0 0 6px #3b82f6' : 'none' }} />
+                          <span style={{ fontSize: 12, color: on ? 'white' : 'rgba(255,255,255,0.4)',
+                            fontWeight: on ? 500 : 400 }}>{c.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Quick circuits (first 4) */}
-            <div style={{ ...card, gridColumn: '1 / -1' }}>
-              <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: '0 0 16px' }}>Quick Controls</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-                {circuits.slice(0, 8).map(c => (
-                  <CircuitButton key={c.id} circuit={c} onToggle={toggleCircuit} loading={loading[c.id]} />
-                ))}
+            {/* Bottom row: System + Chlorinator */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, padding: '16px 18px' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
+                  fontFamily: "'JetBrains Mono', monospace" }}>System</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  {[
+                    { l: 'Panel', v: sys.panelMode || '--', c: sys.panelMode === 'Auto' ? '#4ade80' : '#fbbf24' },
+                    { l: 'Freeze', v: sys.freezeMode ? 'Active' : 'Off', c: sys.freezeMode ? '#fbbf24' : '#4ade80' },
+                    { l: 'Pool Delay', v: sys.poolDelay ? 'Active' : 'None', c: sys.poolDelay ? '#fbbf24' : 'rgba(255,255,255,0.25)' },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                        fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{item.l}</div>
+                      <div style={{ fontSize: 13, color: item.c, fontWeight: 600,
+                        fontFamily: "'JetBrains Mono', monospace" }}>{item.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, padding: '16px 18px' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
+                  fontFamily: "'JetBrains Mono', monospace" }}>Chlorinator</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  {[
+                    { l: 'Status', v: chlor.installed ? 'Online' : 'Offline', c: chlor.installed ? '#4ade80' : '#ef4444' },
+                    { l: 'Salt', v: chlor.salt != null ? `${chlor.salt}` : '--', c: (chlor.salt || 0) < 2700 ? '#fbbf24' : 'white' },
+                    { l: 'Output', v: chlor.poolSetPoint != null ? `${chlor.poolSetPoint}%` : '--', c: 'white' },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                        fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{item.l}</div>
+                      <div style={{ fontSize: 13, color: item.c, fontWeight: 600,
+                        fontFamily: "'JetBrains Mono', monospace" }}>{item.v}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Circuits Tab */}
-        {activeTab === 'circuits' && (
-          <div style={card}>
-            <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: '0 0 20px' }}>
-              All Circuits ({circuits.length})
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              {circuits.map(c => (
-                <CircuitButton key={c.id} circuit={c} onToggle={toggleCircuit} loading={loading[c.id]} />
-              ))}
+        {/* ─── CIRCUITS ─── */}
+        {activeTab === 'pool controls' && (
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>
+              Pool Controls</h2>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+              {circuits.length} circuits &middot; {circuits.filter(c => c.isOn).length} active</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+              {circuits.map(c => {
+                const on = c.isOn;
+                return (
+                  <button key={c.id} onClick={() => toggleCircuit(c.id, on ? 0 : 1)}
+                    disabled={loading[c.id]}
+                    style={{
+                      background: on ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${on ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                      borderRadius: 8, padding: '14px 16px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      opacity: loading[c.id] ? 0.5 : 1, transition: 'all 0.15s',
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                        background: on ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                        boxShadow: on ? '0 0 8px #3b82f6' : 'none' }} />
+                      <span style={{ fontSize: 13, color: on ? 'white' : 'rgba(255,255,255,0.4)',
+                        fontWeight: on ? 500 : 400 }}>{c.name}</span>
+                    </div>
+                    <span style={{ fontSize: 10, color: on ? '#93c5fd' : 'rgba(255,255,255,0.2)',
+                      fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
+                      {on ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Chemistry Tab */}
-        {activeTab === 'chemistry' && chemistry && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div style={card}>
-              <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: '0 0 20px' }}>Water Chemistry</h2>
-              <ChemRow label="pH" value={chemistry.phReading} unit="" low={7.2} high={7.8} />
-              <ChemRow label="ORP" value={chemistry.orpReading} unit="mV" low={650} high={800} />
-              <ChemRow label="Saturation Index" value={chemistry.saturationIndex} unit="" low={-0.3} high={0.3} />
-            </div>
-            <div style={card}>
-              <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: '0 0 20px' }}>Levels</h2>
-              <ChemRow label="Calcium Hardness" value={chemistry.calcium} unit="ppm" low={200} high={400} />
-              <ChemRow label="Cyanuric Acid" value={chemistry.cyanuricAcid} unit="ppm" low={30} high={80} />
-              <ChemRow label="Total Alkalinity" value={chemistry.alkalinity} unit="ppm" low={80} high={120} />
-              <ChemRow label="Salt" value={chemistry.saltPPM} unit="ppm" low={2700} high={3400} />
-            </div>
-            <div style={{ ...card, gridColumn: '1 / -1' }}>
-              <div style={{ display: 'flex', gap: 24 }}>
-                <div>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 4px', fontFamily: 'DM Mono' }}>SETPOINTS</p>
-                  <p style={{ color: 'white', fontSize: 13, margin: '0 0 4px' }}>
-                    pH: <span style={{ color: '#38bdf8', fontFamily: 'DM Mono' }}>{chemistry.phSetPoint}</span>
-                    &nbsp;&nbsp; ORP: <span style={{ color: '#38bdf8', fontFamily: 'DM Mono' }}>{chemistry.orpSetPoint} mV</span>
-                  </p>
-                </div>
-                <div>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 4px', fontFamily: 'DM Mono' }}>WATER TEMP</p>
-                  <p style={{ color: 'white', fontSize: 13, margin: 0, fontFamily: 'DM Mono' }}>{chemistry.temperature}°F</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'chemistry' && !chemistry && (
-          <div style={{ ...card, textAlign: 'center', padding: 48 }}>
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>
-              No chemistry data — IntelliChem may not be installed.
-            </p>
-          </div>
-        )}
-
-        {/* Lights Tab */}
+        {/* ─── LIGHTS ─── */}
         {activeTab === 'lights' && (
-          <div style={card}>
-            <h2 style={{ color: 'white', fontSize: 16, fontWeight: 500, margin: '0 0 6px' }}>Light Controls</h2>
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, margin: '0 0 24px' }}>
-              IntelliBrite & color light commands
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>Light Controls</h2>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>
+              IntelliBrite color modes</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
               {LIGHT_COMMANDS.map(lc => (
                 <button key={lc.cmd} onClick={() => sendLightCommand(lc.cmd)}
                   disabled={loading.lights}
                   style={{
-                    background: `${lc.color}18`,
-                    border: `1px solid ${lc.color}40`,
-                    borderRadius: 10, padding: '14px 10px',
-                    cursor: 'pointer', color: 'white', fontSize: 13,
-                    fontFamily: 'DM Sans', fontWeight: 500,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                    transition: 'all 0.2s', opacity: loading.lights ? 0.5 : 1,
+                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 10, padding: '18px 12px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                    transition: 'all 0.15s', opacity: loading.lights ? 0.4 : 1,
+                    position: 'relative', overflow: 'hidden',
                   }}>
-                  <span style={{ width: 14, height: 14, borderRadius: '50%',
-                    background: lc.color, boxShadow: `0 0 8px ${lc.color}80` }} />
-                  {lc.label}
+                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: lc.color,
+                    boxShadow: `0 0 16px ${lc.color}60`, position: 'relative', zIndex: 1 }} />
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 500,
+                    position: 'relative', zIndex: 1 }}>{lc.label}</span>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%',
+                    background: `linear-gradient(to top, ${lc.color}08, transparent)` }} />
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {!status && (
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-            textAlign: 'center' }}>
-            <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14, fontFamily: 'DM Mono' }}>
-              Connecting to gateway...
-            </div>
+        {/* ─── SCHEDULES ─── */}
+        {activeTab === 'schedules' && (
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>Schedules</h2>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+              {schedulesData ? `${schedulesData.schedules.length} scheduled programs` : 'Loading...'}</p>
+
+            {schedulesData && schedulesData.schedules.length > 0 && (
+              <div>
+                {/* Table header */}
+                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
+                  gap: 8, padding: '0 16px 10px', alignItems: 'center' }}>
+                  {['', 'Circuit', 'Start', 'Stop', 'Days', 'Status'].map((h, i) => (
+                    <div key={i} style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                      fontFamily: "'JetBrains Mono', monospace", textTransform: 'uppercase',
+                      letterSpacing: '0.08em', fontWeight: 600 }}>{h}</div>
+                  ))}
+                </div>
+
+                {/* Schedule rows */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {schedulesData.schedules.map(s => {
+                    const startH = parseInt(s.startTime.split(':')[0]);
+                    const startM = s.startTime.split(':')[1];
+                    const stopH = parseInt(s.stopTime.split(':')[0]);
+                    const stopM = s.stopTime.split(':')[1];
+                    const fmtTime = (h, m) => {
+                      const ampm = h >= 12 ? 'PM' : 'AM';
+                      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                      return `${h12}:${m} ${ampm}`;
+                    };
+
+                    return (
+                      <div key={s.id} style={{
+                        display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
+                        gap: 8, padding: '14px 16px', alignItems: 'center',
+                        background: s.isActive ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${s.isActive ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)'}`,
+                        borderRadius: 8,
+                      }}>
+                        {/* Active indicator */}
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%',
+                            background: s.isActive ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                            boxShadow: s.isActive ? '0 0 8px #3b82f6' : 'none',
+                            animation: s.isActive ? 'pulse 2s ease infinite' : 'none' }} />
+                        </div>
+
+                        {/* Circuit name */}
+                        <div style={{ fontSize: 13, fontWeight: s.isActive ? 600 : 400,
+                          color: s.isActive ? 'white' : 'rgba(255,255,255,0.6)' }}>
+                          {s.circuitName}
+                        </div>
+
+                        {/* Start */}
+                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)',
+                          fontFamily: "'JetBrains Mono', monospace" }}>
+                          {fmtTime(startH, startM)}
+                        </div>
+
+                        {/* Stop */}
+                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)',
+                          fontFamily: "'JetBrains Mono', monospace" }}>
+                          {fmtTime(stopH, stopM)}
+                        </div>
+
+                        {/* Days */}
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          {['M','T','W','T','F','S','S'].map((d, i) => {
+                            const dayBits = [1, 2, 4, 8, 16, 32, 64];
+                            const isOn = !!(s.dayMask & dayBits[i]);
+                            return (
+                              <span key={i} style={{
+                                width: 22, height: 22, borderRadius: 4,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 9, fontWeight: 600,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                background: isOn ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)',
+                                color: isOn ? '#93c5fd' : 'rgba(255,255,255,0.15)',
+                                border: `1px solid ${isOn ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.05)'}`,
+                              }}>{d}</span>
+                            );
+                          })}
+                        </div>
+
+                        {/* Status */}
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4,
+                            fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
+                            background: s.isActive ? 'rgba(59,130,246,0.15)' : s.runsToday ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+                            color: s.isActive ? '#60a5fa' : s.runsToday ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.15)',
+                            border: `1px solid ${s.isActive ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                          }}>{s.isActive ? 'ACTIVE' : s.runsToday ? 'TODAY' : 'IDLE'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {schedulesData && schedulesData.schedules.length === 0 && (
+              <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>No schedules configured</div>
+              </div>
+            )}
           </div>
         )}
 
-      </div>
+        {/* ─── ALERTS ─── */}
+        {activeTab === 'alerts' && (
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>
+              Active Alerts
+              {alertCount > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                  background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
+                  fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{alertCount}</span>
+              )}
+            </h2>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+              Real-time equipment alerts and warnings</p>
+
+            {alertCount === 0 ? (
+              <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px',
+                  background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 20, color: '#4ade80' }}>{'\u2713'}</div>
+                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>All systems nominal</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginTop: 4 }}>No active alerts</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {activeAlerts.map((a, i) => {
+                  const sc = sevColors[a.severity] || sevColors.info;
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '14px 18px', borderRadius: 10,
+                      background: sc.bg, border: `1px solid ${sc.border}`,
+                    }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                        background: sc.dot, boxShadow: `0 0 8px ${sc.dot}`,
+                        animation: a.severity === 'alarm' ? 'pulse 1.5s ease infinite' : 'none' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                          <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                            fontWeight: 600, color: sc.text, padding: '1px 6px', borderRadius: 3,
+                            background: `${sc.dot}15`, textTransform: 'uppercase' }}>
+                            {a.severity}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                            fontFamily: "'JetBrains Mono', monospace" }}>{a.source}</span>
+                        </div>
+                        <div style={{ fontSize: 14, color: 'white', fontWeight: 500 }}>
+                          {a.source}: {a.message}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Loading state */}
+        {!status && (
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            textAlign: 'center' }}>
+            <div style={{ width: 40, height: 40, border: '2px solid rgba(255,255,255,0.1)',
+              borderTopColor: '#3b82f6', borderRadius: '50%', margin: '0 auto 16px',
+              animation: 'spin 1s linear infinite' }} />
+            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13,
+              fontFamily: "'JetBrains Mono', monospace" }}>Connecting to gateway...</div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          </div>
+        )}
+
+        </div>
+      </main>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
