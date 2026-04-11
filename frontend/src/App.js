@@ -20,6 +20,7 @@ const LIGHT_COMMANDS = [
 const NAV_ICONS = {
   dashboard: '\u25A3',
   'pool controls': '\u26A1',
+  chlorinator: '\u2662',
   lights: '\u2738',
   schedules: '\u23F0',
   alerts: '\u26A0',
@@ -119,10 +120,12 @@ export default function App() {
   const [status, setStatus] = useState(null);
   const [alertsData, setAlertsData] = useState(null);
   const [schedulesData, setSchedulesData] = useState(null);
+  const [chlorData, setChlorData] = useState(null);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState({});
   const [activeTab, setActiveTab] = useState('dashboard');
   const [tempInputs, setTempInputs] = useState({});
+  const [chlorOutput, setChlorOutput] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   const showToast = (msg, type = 'info') => {
@@ -151,9 +154,17 @@ export default function App() {
     } catch (e) {}
   }, []);
 
+  const fetchChlor = useCallback(async () => {
+    try {
+      const r = await apiGet('chlorinator');
+      if (r.ok) setChlorData(r.data);
+    } catch (e) {}
+  }, []);
+
   usePoll(fetchStatus, 5000);
   usePoll(fetchAlerts, 10000);
   usePoll(fetchSchedules, 15000);
+  usePoll(fetchChlor, 10000);
 
   const toggleCircuit = async (circuitId, state) => {
     setLoading(l => ({ ...l, [circuitId]: true }));
@@ -191,6 +202,18 @@ export default function App() {
       else showToast(r.error, 'error');
     } catch (e) { showToast('Connection error', 'error'); }
     setLoading(l => ({ ...l, lights: false }));
+  };
+
+  const setChlorSetPoint = async (val) => {
+    const pct = parseInt(val);
+    if (isNaN(pct) || pct < 0 || pct > 100) return showToast('Output must be 0-100%', 'error');
+    setLoading(l => ({ ...l, chlor: true }));
+    try {
+      const r = await apiPost('chlorinator', { poolOutput: pct });
+      if (r.ok) { showToast(`Pool output set to ${pct}%`); fetchChlor(); }
+      else showToast(r.error, 'error');
+    } catch (e) { showToast('Connection error', 'error'); }
+    setLoading(l => ({ ...l, chlor: false }));
   };
 
   const pool = status?.bodies?.find(b => b.name === 'Pool');
@@ -263,7 +286,7 @@ export default function App() {
 
         {/* Nav items */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {['dashboard','pool controls','lights','schedules','alerts'].map(t => (
+          {['dashboard','pool controls','chlorinator','lights','schedules','alerts'].map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               background: activeTab === t ? 'rgba(255,255,255,0.06)' : 'transparent',
               border: 'none',
@@ -519,6 +542,142 @@ export default function App() {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ─── CHLORINATOR ─── */}
+        {activeTab === 'chlorinator' && (
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>IntelliChlor</h2>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>
+              IC40 Salt Chlorine Generator</p>
+
+            {chlorData ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+                {/* Pool Output Gauge (left) */}
+                {(() => {
+                  const pct = (chlorData.poolOutput || 0) / 100;
+                  const r = 90, cx = 100, cy = 100, sw = 10;
+                  const circ = 2 * Math.PI * r;
+                  const gap = 0.2;
+                  const arc = 1 - gap;
+                  const dash = pct * circ * arc;
+                  const color = '#84cc16';
+                  return (
+                    <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 12, padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                        textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16,
+                        fontFamily: "'JetBrains Mono', monospace" }}>Pool Output</div>
+                      <div style={{ position: 'relative', width: 200, height: 200 }}>
+                        <svg width="200" height="200" style={{ overflow: 'visible' }}>
+                          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={sw}
+                            strokeDasharray={`${circ * arc} ${circ * gap}`}
+                            strokeDashoffset={circ * (arc / 2 + 0.25)} strokeLinecap="round"
+                            transform={`rotate(0 ${cx} ${cy})`} />
+                          <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={sw}
+                            strokeDasharray={`${dash} ${circ - dash}`}
+                            strokeDashoffset={circ * (arc / 2 + 0.25)} strokeLinecap="round"
+                            style={{ transition: 'stroke-dasharray 0.8s ease', filter: `drop-shadow(0 0 6px ${color}50)` }} />
+                        </svg>
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 48, fontWeight: 700, color: color,
+                            fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>
+                            {chlorData.poolOutput ?? 0}<span style={{ fontSize: 24, color: 'rgba(255,255,255,0.3)' }}>%</span>
+                          </span>
+                        </div>
+                      </div>
+                      {/* Output adjustment controls */}
+                      <div style={{ width: '100%', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button onClick={() => { const v = Math.max(0, (chlorOutput != null ? chlorOutput : chlorData.poolOutput) - 5); setChlorOutput(v); }}
+                            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
+                              background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 18, fontWeight: 600,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{'\u2212'}</button>
+                          <input type="range" min="0" max="100" step="5"
+                            value={chlorOutput != null ? chlorOutput : chlorData.poolOutput}
+                            onChange={e => setChlorOutput(parseInt(e.target.value))}
+                            style={{ flex: 1, accentColor: '#84cc16', height: 4, cursor: 'pointer' }} />
+                          <button onClick={() => { const v = Math.min(100, (chlorOutput != null ? chlorOutput : chlorData.poolOutput) + 5); setChlorOutput(v); }}
+                            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
+                              background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 18, fontWeight: 600,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                        </div>
+                        {chlorOutput != null && chlorOutput !== chlorData.poolOutput && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => setChlorOutput(null)}
+                              style={{ flex: 1, padding: '8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
+                                background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)',
+                                fontSize: 12, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>Cancel</button>
+                            <button onClick={() => { setChlorSetPoint(chlorOutput); setChlorOutput(null); }}
+                              disabled={loading.chlor}
+                              style={{ flex: 1, padding: '8px', borderRadius: 6, border: 'none',
+                                background: '#84cc16', color: '#0a0f1a',
+                                fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                                opacity: loading.chlor ? 0.5 : 1 }}>
+                              Set {chlorOutput}%
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Right column: Salt, Super Chlorination, Status */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Salt Level */}
+                  <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 12, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)',
+                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                      fontFamily: "'JetBrains Mono', monospace" }}>Salt Level</span>
+                    <span style={{ fontSize: 24, fontWeight: 700,
+                      color: (chlorData.saltPPM || 0) < 2700 ? '#fbbf24' : '#84cc16',
+                      fontFamily: "'JetBrains Mono', monospace" }}>
+                      {chlorData.saltPPM ?? '--'}
+                    </span>
+                  </div>
+
+                  {/* Super Chlorination */}
+                  <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 12, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)',
+                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                      fontFamily: "'JetBrains Mono', monospace" }}>Super Chlorination</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, padding: '6px 16px', borderRadius: 6,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      background: chlorData.isActive && (chlor.superChlorTimer > 0) ? 'rgba(132,204,22,0.15)' : 'rgba(255,255,255,0.04)',
+                      color: chlorData.isActive && (chlor.superChlorTimer > 0) ? '#84cc16' : 'rgba(255,255,255,0.4)',
+                      border: `1px solid ${chlorData.isActive && (chlor.superChlorTimer > 0) ? 'rgba(132,204,22,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                    }}>{chlorData.isActive && (chlor.superChlorTimer > 0) ? 'On' : 'Off'}</span>
+                  </div>
+
+                  {/* Status */}
+                  <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 12, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)',
+                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                      fontFamily: "'JetBrains Mono', monospace" }}>Status</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%',
+                        background: chlorData.isActive ? '#4ade80' : '#ef4444',
+                        boxShadow: `0 0 6px ${chlorData.isActive ? '#4ade80' : '#ef4444'}` }} />
+                      <span style={{ fontSize: 13, fontWeight: 600,
+                        color: chlorData.isActive ? '#4ade80' : '#ef4444',
+                        fontFamily: "'JetBrains Mono', monospace" }}>
+                        {chlorData.isActive ? 'Online' : 'Offline'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>Loading chlorinator data...</div>
+              </div>
+            )}
           </div>
         )}
 
