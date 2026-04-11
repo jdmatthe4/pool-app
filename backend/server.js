@@ -65,6 +65,45 @@ function alertKey(a) {
   return a.source + ':' + a.message;
 }
 
+// ── Pump alarm decoding ─────────────────────────────────────
+// The pumpUnknown1 field from getPumpStatusAsync is actually
+// the pump alarm/warning bitmask. Known bit mappings:
+var PUMP_ALARMS = {
+  0x0001: 'Power Outage',
+  0x0002: 'Overcurrent',
+  0x0004: 'Overvoltage',
+  0x0008: 'Drive Temperature',
+  0x0010: 'Priming Error',
+  0x0020: 'System Blocked',
+  0x0040: 'System Interlock',
+  0x0080: 'Over Temperature Shutdown',
+  0x0100: 'Suction Blockage',
+  0x0200: 'Communication Lost',
+  0x0400: 'Anti-Freeze',
+  0x0800: 'Priming',
+  0x1000: 'Max Pressure Warning Alarm',
+};
+
+function decodePumpAlarms(alarmValue, pumpId) {
+  var alerts = [];
+  if (!alarmValue || alarmValue === 0) return alerts;
+  for (var bit in PUMP_ALARMS) {
+    var val = parseInt(bit);
+    if (alarmValue & val) {
+      // Bits above 0x0800 tend to be warnings; lower bits are hard alarms
+      var severity = val >= 0x0400 ? 'warning' : 'alarm';
+      if (val === 0x1000) severity = 'warning';
+      alerts.push({
+        source: 'Pump ' + pumpId,
+        message: PUMP_ALARMS[val],
+        severity: severity,
+        code: val,
+      });
+    }
+  }
+  return alerts;
+}
+
 function startAlertMonitor() {
   if (_alertMonitorTimer) return;
   console.log('  Alert monitor started (checking every 30s)');
@@ -78,9 +117,11 @@ function startAlertMonitor() {
       return Promise.all([
         conn.equipment.getEquipmentStateAsync(),
         conn.chlor.getIntellichlorConfigAsync(),
+        conn.pump.getPumpStatusAsync(1).catch(function () { return null; }),
       ]).then(function (results) {
         var stateResult = results[0];
         var chlorResult = results[1];
+        var pumpResult = results[2];
 
         var currentAlerts = [];
 
@@ -89,6 +130,12 @@ function startAlertMonitor() {
         chlorAlerts.forEach(function (a) {
           if (a.severity !== 'ok') currentAlerts.push(a);
         });
+
+        // Pump alerts (pumpUnknown1 is the alarm bitmask)
+        if (pumpResult && pumpResult.pumpUnknown1) {
+          var pumpAlerts = decodePumpAlarms(pumpResult.pumpUnknown1, 1);
+          pumpAlerts.forEach(function (a) { currentAlerts.push(a); });
+        }
 
         // System alerts
         if (stateResult.freezeMode) {
@@ -525,6 +572,7 @@ app.get('/api/alerts', async (req, res) => {
     var data = await withConnection(async function(conn) {
       var stateResult = await conn.equipment.getEquipmentStateAsync();
       var chlorResult = await conn.chlor.getIntellichlorConfigAsync();
+      var pumpResult = await conn.pump.getPumpStatusAsync(1).catch(function () { return null; });
 
       var alerts = [];
 
@@ -533,6 +581,12 @@ app.get('/api/alerts', async (req, res) => {
       chlorAlerts.forEach(function(a) {
         if (a.severity !== 'ok') alerts.push(a);
       });
+
+      // Decode pump alarms (pumpUnknown1 is the alarm bitmask)
+      if (pumpResult && pumpResult.pumpUnknown1) {
+        var pumpAlerts = decodePumpAlarms(pumpResult.pumpUnknown1, 1);
+        pumpAlerts.forEach(function(a) { alerts.push(a); });
+      }
 
       // System-level alerts
       if (stateResult.freezeMode) {
