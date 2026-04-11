@@ -159,6 +159,14 @@ function startAlertMonitor() {
           }
         }
 
+        // Find CLEARED alerts (were present before but not now)
+        var clearedAlerts = [];
+        for (var prevKey in _previousAlertKeys) {
+          if (!currentKeys[prevKey]) {
+            clearedAlerts.push(_previousAlertKeys[prevKey]);
+          }
+        }
+
         // Send Pushover notification for each new alert
         newAlerts.forEach(function (a) {
           var priority = a.severity === 'alarm' ? 1 : 0;
@@ -166,6 +174,15 @@ function startAlertMonitor() {
             '🏊 Pool Alert',
             a.source + ': ' + a.message,
             priority
+          );
+        });
+
+        // Send Pushover notification for each cleared alert
+        clearedAlerts.forEach(function (a) {
+          sendPushNotification(
+            '✅ Pool Alert Cleared',
+            a.source + ': ' + a.message + ' has cleared',
+            -1  // low priority — just informational
           );
         });
 
