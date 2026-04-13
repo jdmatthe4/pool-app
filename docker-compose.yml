@@ -28,7 +28,7 @@ services:
     container_name: pool-frontend
     restart: unless-stopped
     ports:
-      - "80:80"       # Access the app at http://<your-vm-ip>
+      - "8081:80"       # Access the app at http://<your-vm-ip>
     extra_hosts:
       # Since backend uses host networking, reach it via the host's loopback
       - "backend:host-gateway"
