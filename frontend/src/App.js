@@ -23,6 +23,7 @@ const NAV_ICONS = {
   chlorinator: '\u2662',
   lights: '\u2738',
   schedules: '\u23F0',
+  'water chemistry': '\u2697',
   alerts: '\u26A0',
 };
 
@@ -127,6 +128,11 @@ export default function App() {
   const [tempInputs, setTempInputs] = useState({});
   const [chlorOutput, setChlorOutput] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [chemData, setChemData] = useState(null);
+  const [chemUploadText, setChemUploadText] = useState('');
+  const [chemUploading, setChemUploading] = useState(false);
+  const [chemView, setChemView] = useState('overview'); // overview | upload | history
+  const [manualEntry, setManualEntry] = useState({ test_date: new Date().toISOString().split('T')[0] });
 
   const showToast = (msg, type = 'info') => {
     setToast({ message: msg, type });
@@ -160,6 +166,45 @@ export default function App() {
       if (r.ok) setChlorData(r.data);
     } catch (e) {}
   }, []);
+
+  const fetchChemistry = useCallback(async () => {
+    try {
+      const r = await apiGet('water-tests');
+      if (r.ok) setChemData(r.data);
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => { fetchChemistry(); }, [fetchChemistry]);
+
+  const uploadChemEmail = async (text) => {
+    setChemUploading(true);
+    try {
+      const r = await apiPost('water-test/upload', { text });
+      if (r.ok) { showToast('Water test results saved'); fetchChemistry(); setChemUploadText(''); setChemView('overview'); }
+      else showToast(r.error, 'error');
+    } catch (e) { showToast('Upload failed', 'error'); }
+    setChemUploading(false);
+  };
+
+  const submitManualEntry = async () => {
+    if (!manualEntry.test_date) return showToast('Date is required', 'error');
+    setChemUploading(true);
+    try {
+      const r = await apiPost('water-test/manual', manualEntry);
+      if (r.ok) { showToast('Water test results saved'); fetchChemistry(); setManualEntry({ test_date: new Date().toISOString().split('T')[0] }); setChemView('overview'); }
+      else showToast(r.error, 'error');
+    } catch (e) { showToast('Save failed', 'error'); }
+    setChemUploading(false);
+  };
+
+  const deleteChemTest = async (id) => {
+    try {
+      const r = await fetch(`${API}/api/water-test/${id}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.ok) { showToast('Test deleted'); fetchChemistry(); }
+      else showToast(d.error, 'error');
+    } catch (e) { showToast('Delete failed', 'error'); }
+  };
 
   usePoll(fetchStatus, 5000);
   usePoll(fetchAlerts, 10000);
@@ -286,7 +331,7 @@ export default function App() {
 
         {/* Nav items */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {['dashboard','pool controls','chlorinator','lights','schedules','alerts'].map(t => (
+          {['dashboard','pool controls','chlorinator','lights','schedules','water chemistry','alerts'].map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               background: activeTab === t ? 'rgba(255,255,255,0.06)' : 'transparent',
               border: 'none',
@@ -785,6 +830,280 @@ export default function App() {
             {schedulesData && schedulesData.schedules.length === 0 && (
               <div style={{ padding: '40px 0', textAlign: 'center' }}>
                 <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>No schedules configured</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── WATER CHEMISTRY ─── */}
+        {activeTab === 'water chemistry' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div>
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>Water Chemistry</h2>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+                  {chemData?.tests?.length || 0} test results on record</p>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {['overview', 'upload', 'manual', 'history'].map(v => (
+                  <button key={v} onClick={() => setChemView(v)} style={{
+                    background: chemView === v ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${chemView === v ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                    color: chemView === v ? '#93c5fd' : 'rgba(255,255,255,0.4)',
+                    borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 500,
+                  }}>{v.charAt(0).toUpperCase() + v.slice(1)}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Overview: Latest results + recommendations ── */}
+            {chemView === 'overview' && (
+              <div>
+                {chemData?.latest ? (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace",
+                      textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                      Latest Test — {new Date(chemData.latest.test_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </div>
+
+                    {/* Parameter cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
+                      {Object.entries(chemData.idealRanges || {}).map(([key, range]) => {
+                        const val = chemData.latest[key];
+                        if (val == null) return null;
+                        let statusColor = '#4ade80'; // ok
+                        let statusText = 'OK';
+                        if (val < range.min) { statusColor = '#fbbf24'; statusText = 'LOW'; }
+                        else if (val > range.max) { statusColor = '#ef4444'; statusText = 'HIGH'; }
+                        return (
+                          <div key={key} style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                            borderRadius: 10, padding: '16px', position: 'relative', overflow: 'hidden' }}>
+                            <div style={{ position: 'absolute', top: 0, right: 0, padding: '4px 10px', borderRadius: '0 10px 0 8px',
+                              background: `${statusColor}15`, fontSize: 9, fontWeight: 700, color: statusColor,
+                              fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.05em' }}>{statusText}</div>
+                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+                              textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{range.label}</div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: statusColor,
+                              fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, marginBottom: 6 }}>
+                              {val}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 3 }}>{range.unit}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>
+                              Ideal: {range.min} - {range.max}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Recommendations */}
+                    {chemData.recommendations?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace",
+                          textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Recommendations</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {chemData.recommendations.map((rec, i) => {
+                            const color = rec.status === 'high' ? '#ef4444' : '#fbbf24';
+                            return (
+                              <div key={i} style={{ background: `${color}08`, border: `1px solid ${color}20`,
+                                borderRadius: 10, padding: '14px 18px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                                <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, marginTop: 3,
+                                  background: color, boxShadow: `0 0 6px ${color}` }} />
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: 'white', marginBottom: 4 }}>
+                                    {rec.parameter}: <span style={{ color }}>{rec.value} {chemData.idealRanges[Object.keys(chemData.idealRanges).find(k => chemData.idealRanges[k].label === rec.parameter)]?.unit}</span>
+                                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 8 }}>Ideal: {rec.ideal}</span>
+                                  </div>
+                                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>{rec.action}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {chemData.recommendations?.length === 0 && (
+                      <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                        <div style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 12px',
+                          background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#4ade80' }}>{'\u2713'}</div>
+                        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>All levels within ideal range</div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ padding: '60px 0', textAlign: 'center' }}>
+                    <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.2 }}>{'\u2697'}</div>
+                    <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>No water test results yet</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginBottom: 20 }}>Upload an AquaCheck email or enter results manually</div>
+                    <button onClick={() => setChemView('upload')} style={{
+                      background: '#3b82f6', border: 'none', color: 'white', borderRadius: 8,
+                      padding: '10px 24px', fontSize: 13, fontWeight: 600 }}>Upload Results</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Upload: Paste email text ── */}
+            {chemView === 'upload' && (
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, padding: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4,
+                  fontFamily: "'JetBrains Mono', monospace" }}>Paste AquaCheck Email</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginBottom: 16 }}>
+                  Copy the full email text from your AquaCheck results and paste it below</div>
+                <textarea
+                  value={chemUploadText}
+                  onChange={e => setChemUploadText(e.target.value)}
+                  placeholder={'AquaCheck Select Results\n13 April 2026\n\nTotal Hardness - 250 ppm\nYour value is 250 ppm...\n\nFree Chlorine - 1.0 ppm\n...\n\npH - 7.4 pH\n...'}
+                  style={{
+                    width: '100%', minHeight: 260, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'white', borderRadius: 8, padding: 16, fontSize: 13, lineHeight: 1.6,
+                    fontFamily: "'JetBrains Mono', monospace", resize: 'vertical', outline: 'none',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setChemUploadText(''); setChemView('overview'); }}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'rgba(255,255,255,0.5)', borderRadius: 6, padding: '10px 20px', fontSize: 12, fontWeight: 600 }}>
+                    Cancel</button>
+                  <button onClick={() => uploadChemEmail(chemUploadText)}
+                    disabled={!chemUploadText.trim() || chemUploading}
+                    style={{ background: '#3b82f6', border: 'none', color: 'white', borderRadius: 6,
+                      padding: '10px 24px', fontSize: 12, fontWeight: 600,
+                      opacity: (!chemUploadText.trim() || chemUploading) ? 0.4 : 1 }}>
+                    {chemUploading ? 'Parsing...' : 'Parse & Save'}</button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Manual Entry ── */}
+            {chemView === 'manual' && (
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, padding: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16,
+                  fontFamily: "'JetBrains Mono', monospace" }}>Manual Entry</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+                      textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 4 }}>Test Date</label>
+                    <input type="date" value={manualEntry.test_date || ''}
+                      onChange={e => setManualEntry(m => ({ ...m, test_date: e.target.value }))}
+                      style={{ ...inputStyle, width: '100%' }} />
+                  </div>
+                  {[
+                    { key: 'free_chlorine', label: 'Free Chlorine (ppm)' },
+                    { key: 'total_chlorine', label: 'Total Chlorine (ppm)' },
+                    { key: 'ph', label: 'pH' },
+                    { key: 'total_alkalinity', label: 'Total Alkalinity (ppm)' },
+                    { key: 'cyanuric_acid', label: 'Cyanuric Acid (ppm)' },
+                    { key: 'total_hardness', label: 'Total Hardness (ppm)' },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+                        textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                      <input type="number" step="0.1" placeholder="--"
+                        value={manualEntry[f.key] ?? ''}
+                        onChange={e => setManualEntry(m => ({ ...m, [f.key]: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                        style={{ ...inputStyle, width: '100%' }} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setManualEntry({ test_date: new Date().toISOString().split('T')[0] }); setChemView('overview'); }}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'rgba(255,255,255,0.5)', borderRadius: 6, padding: '10px 20px', fontSize: 12, fontWeight: 600 }}>
+                    Cancel</button>
+                  <button onClick={submitManualEntry}
+                    disabled={chemUploading}
+                    style={{ background: '#3b82f6', border: 'none', color: 'white', borderRadius: 6,
+                      padding: '10px 24px', fontSize: 12, fontWeight: 600,
+                      opacity: chemUploading ? 0.4 : 1 }}>
+                    {chemUploading ? 'Saving...' : 'Save Results'}</button>
+                </div>
+              </div>
+            )}
+
+            {/* ── History: All test results ── */}
+            {chemView === 'history' && (
+              <div>
+                {chemData?.tests?.length > 0 ? (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
+                      <thead>
+                        <tr>
+                          {['Date', 'FC', 'TC', 'pH', 'TA', 'CH', 'CYA', 'Source', ''].map((h, i) => (
+                            <th key={i} style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace",
+                              textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600,
+                              padding: '0 12px 8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chemData.tests.map(t => {
+                          const ranges = chemData.idealRanges || {};
+                          const cellColor = (key, val) => {
+                            if (val == null) return 'rgba(255,255,255,0.2)';
+                            const r = ranges[key];
+                            if (!r) return 'white';
+                            if (val < r.min) return '#fbbf24';
+                            if (val > r.max) return '#ef4444';
+                            return '#4ade80';
+                          };
+                          return (
+                            <tr key={t.id} style={{ background: 'rgba(255,255,255,0.02)' }}>
+                              <td style={{ padding: '12px', borderRadius: '8px 0 0 8px', fontSize: 12, color: 'rgba(255,255,255,0.7)',
+                                fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>
+                                {new Date(t.test_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              {[
+                                { key: 'free_chlorine', val: t.free_chlorine },
+                                { key: 'total_chlorine', val: t.total_chlorine },
+                                { key: 'ph', val: t.ph },
+                                { key: 'total_alkalinity', val: t.total_alkalinity },
+                                { key: 'total_hardness', val: t.total_hardness },
+                                { key: 'cyanuric_acid', val: t.cyanuric_acid },
+                              ].map((c, i) => (
+                                <td key={i} style={{ padding: '12px', fontSize: 13, fontWeight: 600,
+                                  color: cellColor(c.key, c.val), fontFamily: "'JetBrains Mono', monospace" }}>
+                                  {c.val != null ? c.val : '--'}
+                                </td>
+                              ))}
+                              <td style={{ padding: '12px', fontSize: 10, color: 'rgba(255,255,255,0.25)',
+                                fontFamily: "'JetBrains Mono', monospace" }}>{t.source}</td>
+                              <td style={{ padding: '12px', borderRadius: '0 8px 8px 0', textAlign: 'right' }}>
+                                <button onClick={() => deleteChemTest(t.id)}
+                                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
+                                    color: '#fca5a5', borderRadius: 4, padding: '4px 10px', fontSize: 10,
+                                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>DEL</button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {/* Legend */}
+                    <div style={{ display: 'flex', gap: 16, marginTop: 12, padding: '0 12px' }}>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
+                        FC = Free Chlorine &middot; TC = Total Chlorine &middot; TA = Total Alkalinity &middot; CH = Calcium Hardness &middot; CYA = Cyanuric Acid
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 6, padding: '0 12px' }}>
+                      {[{ c: '#4ade80', l: 'OK' }, { c: '#fbbf24', l: 'Low' }, { c: '#ef4444', l: 'High' }].map(s => (
+                        <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.c }} />
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>{s.l}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                    <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>No test results yet</div>
+                  </div>
+                )}
               </div>
             )}
           </div>

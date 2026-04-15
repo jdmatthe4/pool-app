@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const ScreenLogic = require('node-screenlogic');
 const https = require('https');
+const path = require('path');
+const Database = require('better-sqlite3');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -693,6 +695,242 @@ app.post('/api/notifications/test', async function (req, res) {
   try {
     await sendPushNotification('🏊 Pool Alert System', 'Test notification — alerts are working!', 0);
     res.json({ ok: true, message: 'Test notification sent via Pushover' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Chemistry database ──────────────────────────────────────
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'chemistry.db');
+const fs = require('fs');
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS water_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    test_date TEXT NOT NULL,
+    total_hardness REAL,
+    total_chlorine REAL,
+    free_chlorine REAL,
+    combined_chlorine REAL,
+    ph REAL,
+    total_alkalinity REAL,
+    cyanuric_acid REAL,
+    source TEXT DEFAULT 'manual',
+    raw_text TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// Ideal ranges for pool chemistry
+const IDEAL_RANGES = {
+  total_hardness:    { min: 200, max: 400, unit: 'ppm', label: 'Total Hardness' },
+  total_chlorine:    { min: 1, max: 3, unit: 'ppm', label: 'Total Chlorine' },
+  free_chlorine:     { min: 1, max: 3, unit: 'ppm', label: 'Free Chlorine' },
+  combined_chlorine: { min: 0, max: 0.5, unit: 'ppm', label: 'Combined Chlorine' },
+  ph:                { min: 7.2, max: 7.6, unit: 'pH', label: 'pH' },
+  total_alkalinity:  { min: 80, max: 120, unit: 'ppm', label: 'Total Alkalinity' },
+  cyanuric_acid:     { min: 30, max: 50, unit: 'ppm', label: 'Cyanuric Acid' },
+};
+
+function generateRecommendations(test) {
+  var recs = [];
+  for (var key in IDEAL_RANGES) {
+    var range = IDEAL_RANGES[key];
+    var val = test[key];
+    if (val == null) continue;
+    if (val < range.min) {
+      recs.push({ parameter: range.label, status: 'low', value: val, ideal: range.min + ' - ' + range.max + ' ' + range.unit, action: getAction(key, 'low', val, range) });
+    } else if (val > range.max) {
+      recs.push({ parameter: range.label, status: 'high', value: val, ideal: range.min + ' - ' + range.max + ' ' + range.unit, action: getAction(key, 'high', val, range) });
+    }
+  }
+  return recs;
+}
+
+function getAction(key, status, value, range) {
+  var actions = {
+    ph: {
+      high: 'Add muriatic acid or dry acid (pH decreaser) to lower pH',
+      low: 'Add soda ash (sodium carbonate) to raise pH',
+    },
+    free_chlorine: {
+      low: 'Add liquid chlorine, DiChlor, or TriChlor to raise chlorine level. Shock the pool if very low.',
+      high: 'Reduce chlorinator output or wait for chlorine to dissipate. Do not swim until below 5 ppm.',
+    },
+    total_chlorine: {
+      low: 'Add chlorine to raise total chlorine level',
+      high: 'High total chlorine with normal free chlorine indicates combined chlorine (chloramines). Shock the pool.',
+    },
+    combined_chlorine: {
+      high: 'Combined chlorine indicates chloramines. Shock the pool with a breakpoint chlorination (10x the combined chlorine level).',
+    },
+    total_alkalinity: {
+      low: 'Add sodium bicarbonate (baking soda) to raise alkalinity',
+      high: 'Add muriatic acid to lower alkalinity. Aerate the pool to raise pH back up afterward.',
+    },
+    cyanuric_acid: {
+      low: 'Add cyanuric acid (stabilizer/conditioner) to protect chlorine from UV breakdown',
+      high: 'Dilute by partially draining and refilling with fresh water. CYA does not break down chemically.',
+    },
+    total_hardness: {
+      low: 'Add calcium chloride to raise calcium hardness',
+      high: 'Dilute by partially draining and refilling with fresh water, or use a sequestering agent.',
+    },
+  };
+  return (actions[key] && actions[key][status]) || ('Adjust ' + IDEAL_RANGES[key].label + ' to within ideal range');
+}
+
+// Parse AquaCheck email text
+function parseAquaCheckEmail(text) {
+  var result = { source: 'aquacheck' };
+
+  // Extract date - look for patterns like "13 April 2026" or "April 13, 2026"
+  var dateMatch = text.match(/(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i);
+  if (!dateMatch) {
+    dateMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})/i);
+    if (dateMatch) {
+      var months = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
+      var m = months[dateMatch[1].toLowerCase()];
+      var d = parseInt(dateMatch[2]);
+      var y = parseInt(dateMatch[3]);
+      result.test_date = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    }
+  } else {
+    var months2 = { january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
+    var m2 = months2[dateMatch[2].toLowerCase()];
+    var d2 = parseInt(dateMatch[1]);
+    var y2 = parseInt(dateMatch[3]);
+    result.test_date = y2 + '-' + String(m2).padStart(2, '0') + '-' + String(d2).padStart(2, '0');
+  }
+
+  if (!result.test_date) {
+    result.test_date = new Date().toISOString().split('T')[0];
+  }
+
+  // Parse values - look for "Parameter - Value unit" pattern
+  var hardnessMatch = text.match(/Total Hardness\s*[-–]\s*([\d.]+)\s*ppm/i);
+  if (hardnessMatch) result.total_hardness = parseFloat(hardnessMatch[1]);
+
+  var totalChlorMatch = text.match(/Total Chlorine\s*[-–]\s*([\d.]+)\s*ppm/i);
+  if (totalChlorMatch) result.total_chlorine = parseFloat(totalChlorMatch[1]);
+
+  var freeChlorMatch = text.match(/Free Chlorine\s*[-–]\s*([\d.]+)\s*ppm/i);
+  if (freeChlorMatch) result.free_chlorine = parseFloat(freeChlorMatch[1]);
+
+  // Combined chlorine - sometimes listed explicitly, otherwise calculate
+  var combinedMatch = text.match(/Combined Chlorine\s*(?:Value\s*(?:is)?)?\s*([\d.]+)\s*ppm/i);
+  if (combinedMatch) {
+    result.combined_chlorine = parseFloat(combinedMatch[1]);
+  } else if (result.total_chlorine != null && result.free_chlorine != null) {
+    result.combined_chlorine = Math.max(0, result.total_chlorine - result.free_chlorine);
+  }
+
+  var phMatch = text.match(/pH\s*[-–]\s*([\d.]+)/i);
+  if (phMatch) result.ph = parseFloat(phMatch[1]);
+
+  var alkMatch = text.match(/Total Alkalinity\s*[-–]\s*([\d.]+)\s*ppm/i);
+  if (alkMatch) result.total_alkalinity = parseFloat(alkMatch[1]);
+
+  var cyaMatch = text.match(/Cyanuric Acid\s*[-–]\s*([\d.]+)\s*ppm/i);
+  if (cyaMatch) result.cyanuric_acid = parseFloat(cyaMatch[1]);
+
+  return result;
+}
+
+// POST /api/water-test/upload — parse and store email text
+app.post('/api/water-test/upload', function (req, res) {
+  try {
+    var emailText = req.body.text;
+    if (!emailText || typeof emailText !== 'string') {
+      return res.status(400).json({ ok: false, error: 'text field is required' });
+    }
+
+    var parsed = parseAquaCheckEmail(emailText);
+    var stmt = db.prepare(`
+      INSERT INTO water_tests (test_date, total_hardness, total_chlorine, free_chlorine, combined_chlorine, ph, total_alkalinity, cyanuric_acid, source, raw_text)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    var info = stmt.run(
+      parsed.test_date,
+      parsed.total_hardness ?? null,
+      parsed.total_chlorine ?? null,
+      parsed.free_chlorine ?? null,
+      parsed.combined_chlorine ?? null,
+      parsed.ph ?? null,
+      parsed.total_alkalinity ?? null,
+      parsed.cyanuric_acid ?? null,
+      parsed.source || 'aquacheck',
+      emailText
+    );
+
+    var test = db.prepare('SELECT * FROM water_tests WHERE id = ?').get(info.lastInsertRowid);
+    var recommendations = generateRecommendations(test);
+
+    res.json({ ok: true, data: { test: test, recommendations: recommendations } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/water-test/manual — store manually entered values
+app.post('/api/water-test/manual', function (req, res) {
+  try {
+    var b = req.body;
+    if (!b.test_date) {
+      return res.status(400).json({ ok: false, error: 'test_date is required' });
+    }
+
+    var stmt = db.prepare(`
+      INSERT INTO water_tests (test_date, total_hardness, total_chlorine, free_chlorine, combined_chlorine, ph, total_alkalinity, cyanuric_acid, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual')
+    `);
+    var info = stmt.run(
+      b.test_date,
+      b.total_hardness ?? null,
+      b.total_chlorine ?? null,
+      b.free_chlorine ?? null,
+      b.combined_chlorine ?? null,
+      b.ph ?? null,
+      b.total_alkalinity ?? null,
+      b.cyanuric_acid ?? null
+    );
+
+    var test = db.prepare('SELECT * FROM water_tests WHERE id = ?').get(info.lastInsertRowid);
+    var recommendations = generateRecommendations(test);
+
+    res.json({ ok: true, data: { test: test, recommendations: recommendations } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/water-tests — fetch history
+app.get('/api/water-tests', function (req, res) {
+  try {
+    var limit = parseInt(req.query.limit) || 50;
+    var tests = db.prepare('SELECT * FROM water_tests ORDER BY test_date DESC, created_at DESC LIMIT ?').all(limit);
+    // Generate recommendations for the most recent test
+    var latest = tests[0] || null;
+    var recommendations = latest ? generateRecommendations(latest) : [];
+
+    res.json({ ok: true, data: { tests: tests, latest: latest, recommendations: recommendations, idealRanges: IDEAL_RANGES } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// DELETE /api/water-test/:id — delete a test
+app.delete('/api/water-test/:id', function (req, res) {
+  try {
+    var id = parseInt(req.params.id);
+    var info = db.prepare('DELETE FROM water_tests WHERE id = ?').run(id);
+    if (info.changes === 0) {
+      return res.status(404).json({ ok: false, error: 'Test not found' });
+    }
+    res.json({ ok: true, message: 'Test deleted' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
