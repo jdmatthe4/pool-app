@@ -718,11 +718,15 @@ db.exec(`
     ph REAL,
     total_alkalinity REAL,
     cyanuric_acid REAL,
+    salt REAL,
     source TEXT DEFAULT 'manual',
     raw_text TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )
 `);
+
+// Add salt column to existing databases that don't have it yet
+try { db.exec('ALTER TABLE water_tests ADD COLUMN salt REAL'); } catch (e) { /* column already exists */ }
 
 // Ideal ranges for pool chemistry
 const IDEAL_RANGES = {
@@ -733,7 +737,11 @@ const IDEAL_RANGES = {
   ph:                { min: 7.2, max: 7.6, unit: 'pH', label: 'pH' },
   total_alkalinity:  { min: 80, max: 120, unit: 'ppm', label: 'Total Alkalinity' },
   cyanuric_acid:     { min: 30, max: 50, unit: 'ppm', label: 'Cyanuric Acid' },
+  salt:              { min: 2700, max: 3400, unit: 'ppm', label: 'Salt' },
 };
+
+// Pool volume in gallons — used for dosage calculations
+var POOL_GALLONS = 20000;
 
 function generateRecommendations(test) {
   var recs = [];
@@ -742,45 +750,127 @@ function generateRecommendations(test) {
     var val = test[key];
     if (val == null) continue;
     if (val < range.min) {
-      recs.push({ parameter: range.label, status: 'low', value: val, ideal: range.min + ' - ' + range.max + ' ' + range.unit, action: getAction(key, 'low', val, range) });
+      var target = (range.min + range.max) / 2; // aim for midpoint of ideal
+      recs.push({ parameter: range.label, status: 'low', value: val, ideal: range.min + ' - ' + range.max + ' ' + range.unit, action: getDosage(key, 'low', val, target, range) });
     } else if (val > range.max) {
-      recs.push({ parameter: range.label, status: 'high', value: val, ideal: range.min + ' - ' + range.max + ' ' + range.unit, action: getAction(key, 'high', val, range) });
+      var target2 = (range.min + range.max) / 2;
+      recs.push({ parameter: range.label, status: 'high', value: val, ideal: range.min + ' - ' + range.max + ' ' + range.unit, action: getDosage(key, 'high', val, target2, range) });
     }
   }
   return recs;
 }
 
-function getAction(key, status, value, range) {
-  var actions = {
-    ph: {
-      high: 'Add muriatic acid or dry acid (pH decreaser) to lower pH',
-      low: 'Add soda ash (sodium carbonate) to raise pH',
-    },
-    free_chlorine: {
-      low: 'Add liquid chlorine, DiChlor, or TriChlor to raise chlorine level. Shock the pool if very low.',
-      high: 'Reduce chlorinator output or wait for chlorine to dissipate. Do not swim until below 5 ppm.',
-    },
-    total_chlorine: {
-      low: 'Add chlorine to raise total chlorine level',
-      high: 'High total chlorine with normal free chlorine indicates combined chlorine (chloramines). Shock the pool.',
-    },
-    combined_chlorine: {
-      high: 'Combined chlorine indicates chloramines. Shock the pool with a breakpoint chlorination (10x the combined chlorine level).',
-    },
-    total_alkalinity: {
-      low: 'Add sodium bicarbonate (baking soda) to raise alkalinity',
-      high: 'Add muriatic acid to lower alkalinity. Aerate the pool to raise pH back up afterward.',
-    },
-    cyanuric_acid: {
-      low: 'Add cyanuric acid (stabilizer/conditioner) to protect chlorine from UV breakdown',
-      high: 'Dilute by partially draining and refilling with fresh water. CYA does not break down chemically.',
-    },
-    total_hardness: {
-      low: 'Add calcium chloride to raise calcium hardness',
-      high: 'Dilute by partially draining and refilling with fresh water, or use a sequestering agent.',
-    },
-  };
-  return (actions[key] && actions[key][status]) || ('Adjust ' + IDEAL_RANGES[key].label + ' to within ideal range');
+function fmtWeight(oz) {
+  if (oz >= 16) {
+    var lbs = Math.floor(oz / 16);
+    var rem = Math.round(oz % 16);
+    return rem > 0 ? lbs + ' lb ' + rem + ' oz' : lbs + ' lbs';
+  }
+  return Math.round(oz) + ' oz';
+}
+
+function fmtFlOz(floz) {
+  if (floz >= 128) {
+    var gal = (floz / 128).toFixed(1);
+    return gal + ' gal';
+  }
+  if (floz >= 16) {
+    var cups = (floz / 8).toFixed(1);
+    return cups + ' cups (' + Math.round(floz) + ' fl oz)';
+  }
+  return Math.round(floz) + ' fl oz';
+}
+
+function getDosage(key, status, current, target, range) {
+  var delta = Math.abs(target - current);
+  var gal = POOL_GALLONS;
+
+  switch (key) {
+    case 'free_chlorine':
+    case 'total_chlorine': {
+      if (status === 'high') return 'Reduce chlorinator output or wait for chlorine to dissipate naturally. Do not swim until below 5 ppm.';
+      // Liquid chlorine (sodium hypochlorite 12.5%): ~1 fl oz per 1 ppm per 1,000 gal
+      var liquidOz = delta * (gal / 1000);
+      // DiChlor 56% (granular): ~2 oz per 1 ppm per 10,000 gal
+      var dichlorOz = delta * (gal / 10000) * 2;
+      var action = 'Add ' + fmtFlOz(liquidOz) + ' of liquid chlorine (12.5%)';
+      action += ', or ' + fmtWeight(dichlorOz) + ' of DiChlor 56% granular';
+      action += ' to raise ' + range.label + ' by ' + delta.toFixed(1) + ' ppm.';
+      if (current === 0) action += ' Consider shocking the pool.';
+      return action;
+    }
+
+    case 'ph': {
+      if (status === 'high') {
+        // Muriatic acid (31.45%): ~20 fl oz per 0.1 pH drop per 20,000 gal
+        // Dry acid (sodium bisulfate): ~12 oz per 0.1 pH drop per 20,000 gal
+        var phDrop = current - target;
+        var muriaticOz = (phDrop / 0.1) * 20 * (gal / 20000);
+        var dryAcidOz = (phDrop / 0.1) * 12 * (gal / 20000);
+        return 'Add ' + fmtFlOz(muriaticOz) + ' of muriatic acid (31.45%), or ' + fmtWeight(dryAcidOz) + ' of dry acid (sodium bisulfate) to lower pH by ' + phDrop.toFixed(1) + '. Add to deep end with pump running, retest after 4 hours.';
+      } else {
+        // Soda ash (sodium carbonate): ~6 oz per 0.1 pH rise per 10,000 gal
+        var phRise = target - current;
+        var sodaAshOz = (phRise / 0.1) * 6 * (gal / 10000);
+        return 'Add ' + fmtWeight(sodaAshOz) + ' of soda ash (sodium carbonate) to raise pH by ' + phRise.toFixed(1) + '. Dissolve in bucket first, add with pump running.';
+      }
+    }
+
+    case 'total_alkalinity': {
+      if (status === 'low') {
+        // Sodium bicarbonate (baking soda): ~1.5 lbs per 10 ppm per 10,000 gal
+        var bakingSodaLbs = (delta / 10) * 1.5 * (gal / 10000);
+        return 'Add ' + bakingSodaLbs.toFixed(1) + ' lbs of sodium bicarbonate (baking soda) to raise alkalinity by ' + Math.round(delta) + ' ppm. Add no more than 2 lbs at a time, retest after 6 hours.';
+      } else {
+        // Muriatic acid: ~25 fl oz per 10 ppm reduction per 20,000 gal
+        var acidOz2 = (delta / 10) * 25 * (gal / 20000);
+        return 'Add ' + fmtFlOz(acidOz2) + ' of muriatic acid (31.45%) to lower alkalinity by ' + Math.round(delta) + ' ppm. Add in deep end with pump running. Aerate afterward to restore pH.';
+      }
+    }
+
+    case 'cyanuric_acid': {
+      if (status === 'low') {
+        // Cyanuric acid (stabilizer): ~13 oz per 10 ppm per 10,000 gal
+        var cyaOz = (delta / 10) * 13 * (gal / 10000);
+        return 'Add ' + fmtWeight(cyaOz) + ' of cyanuric acid (stabilizer) to raise CYA by ' + Math.round(delta) + ' ppm. Dissolve in warm water or add to skimmer sock. Takes 3-7 days to fully dissolve.';
+      } else {
+        var drainPct = Math.round((1 - range.max / current) * 100);
+        return 'CYA does not break down chemically. Drain approximately ' + drainPct + '% of the pool water and refill with fresh water to lower CYA from ' + current + ' to ~' + Math.round(range.max) + ' ppm.';
+      }
+    }
+
+    case 'total_hardness': {
+      if (status === 'low') {
+        // Calcium chloride (77%): ~1.25 lbs per 10 ppm per 10,000 gal
+        var calciumLbs = (delta / 10) * 1.25 * (gal / 10000);
+        return 'Add ' + calciumLbs.toFixed(1) + ' lbs of calcium chloride to raise calcium hardness by ' + Math.round(delta) + ' ppm. Dissolve in bucket of pool water first, add slowly near a return jet.';
+      } else {
+        var drainPct2 = Math.round((1 - range.max / current) * 100);
+        return 'Drain approximately ' + drainPct2 + '% of the pool water and refill with fresh water to lower hardness from ' + current + ' to ~' + Math.round(range.max) + ' ppm. You can also use a sequestering agent to manage scaling.';
+      }
+    }
+
+    case 'salt': {
+      if (status === 'low') {
+        // Pool salt: ~0.6 lbs per 50 ppm per 1,000 gal → simplifies to lbs = delta * gal / 83333
+        var saltLbs = Math.round(delta * gal / 83333);
+        return 'Add ' + saltLbs + ' lbs of pool-grade salt (sodium chloride) to raise salt by ' + Math.round(delta) + ' ppm. Pour around the pool perimeter with pump running. Allow 24 hours to fully dissolve and circulate before retesting.';
+      } else {
+        var drainPct3 = Math.round((1 - range.max / current) * 100);
+        return 'Drain approximately ' + drainPct3 + '% of the pool water and refill with fresh water to lower salt from ' + current + ' to ~' + Math.round(range.max) + ' ppm.';
+      }
+    }
+
+    case 'combined_chlorine': {
+      // Breakpoint chlorination: need to add 10x the combined chlorine level
+      var shockPpm = current * 10;
+      var shockLiquidOz = shockPpm * (gal / 1000);
+      return 'Shock the pool to breakpoint chlorination. Add ' + fmtFlOz(shockLiquidOz) + ' of liquid chlorine (12.5%) to add ' + shockPpm.toFixed(1) + ' ppm FC (10x combined chlorine). Run pump for 8+ hours, preferably at dusk.';
+    }
+
+    default:
+      return 'Adjust ' + range.label + ' to within ideal range (' + range.min + '-' + range.max + ' ' + range.unit + ').';
+  }
 }
 
 // Parse AquaCheck email text
@@ -810,15 +900,34 @@ function parseAquaCheckEmail(text) {
     result.test_date = new Date().toISOString().split('T')[0];
   }
 
-  // Parse values - look for "Parameter - Value unit" pattern
-  var hardnessMatch = text.match(/Total Hardness\s*[-–]\s*([\d.]+)\s*ppm/i);
-  if (hardnessMatch) result.total_hardness = parseFloat(hardnessMatch[1]);
+  // Helper: extract a value for a parameter. First tries the title line
+  // ("Parameter - Value unit"), then falls back to the "Your value is X" line
+  // in the paragraph following that parameter header. AquaCheck sometimes puts
+  // the ideal range on the title line instead of the reading.
+  function extractValue(txt, paramName, unit) {
+    // Build a regex for the section starting with the parameter name
+    var sectionRe = new RegExp(paramName + '\\s*[-–][^\\n]*\\n([\\s\\S]*?)(?=\\n\\n|$)', 'i');
+    var section = txt.match(sectionRe);
 
-  var totalChlorMatch = text.match(/Total Chlorine\s*[-–]\s*([\d.]+)\s*ppm/i);
-  if (totalChlorMatch) result.total_chlorine = parseFloat(totalChlorMatch[1]);
+    // Try title line first: "Parameter - 1.0 ppm" (single number, not a range like "30-50")
+    var titleRe = new RegExp(paramName + '\\s*[-–]\\s*(\\d+\\.?\\d*)\\s*' + unit, 'i');
+    var titleMatch = txt.match(titleRe);
+    if (titleMatch) return parseFloat(titleMatch[1]);
 
-  var freeChlorMatch = text.match(/Free Chlorine\s*[-–]\s*([\d.]+)\s*ppm/i);
-  if (freeChlorMatch) result.free_chlorine = parseFloat(freeChlorMatch[1]);
+    // Fallback: "Your value is X unit" in the section body
+    if (section) {
+      var bodyMatch = section[1].match(/Your value is\s*([\d.]+)\s*/i);
+      if (bodyMatch) return parseFloat(bodyMatch[1]);
+    }
+    return undefined;
+  }
+
+  result.total_hardness = extractValue(text, 'Total Hardness', 'ppm');
+  result.total_chlorine = extractValue(text, 'Total Chlorine', 'ppm');
+  result.free_chlorine = extractValue(text, 'Free Chlorine', 'ppm');
+  result.ph = extractValue(text, 'pH', 'pH');
+  result.total_alkalinity = extractValue(text, 'Total Alkalinity', 'ppm');
+  result.cyanuric_acid = extractValue(text, 'Cyanuric Acid', 'ppm');
 
   // Combined chlorine - sometimes listed explicitly, otherwise calculate
   var combinedMatch = text.match(/Combined Chlorine\s*(?:Value\s*(?:is)?)?\s*([\d.]+)\s*ppm/i);
@@ -828,20 +937,18 @@ function parseAquaCheckEmail(text) {
     result.combined_chlorine = Math.max(0, result.total_chlorine - result.free_chlorine);
   }
 
-  var phMatch = text.match(/pH\s*[-–]\s*([\d.]+)/i);
-  if (phMatch) result.ph = parseFloat(phMatch[1]);
-
-  var alkMatch = text.match(/Total Alkalinity\s*[-–]\s*([\d.]+)\s*ppm/i);
-  if (alkMatch) result.total_alkalinity = parseFloat(alkMatch[1]);
-
-  var cyaMatch = text.match(/Cyanuric Acid\s*[-–]\s*([\d.]+)\s*ppm/i);
-  if (cyaMatch) result.cyanuric_acid = parseFloat(cyaMatch[1]);
-
   return result;
 }
 
+// Helper: read current salt from chlorinator (best-effort, returns null on failure)
+function getCurrentSalt() {
+  return withConnection(function (conn) {
+    return conn.chlor.getIntellichlorConfigAsync().then(function (d) { return d.salt || null; });
+  }).catch(function () { return null; });
+}
+
 // POST /api/water-test/upload — parse and store email text
-app.post('/api/water-test/upload', function (req, res) {
+app.post('/api/water-test/upload', async function (req, res) {
   try {
     var emailText = req.body.text;
     if (!emailText || typeof emailText !== 'string') {
@@ -849,9 +956,13 @@ app.post('/api/water-test/upload', function (req, res) {
     }
 
     var parsed = parseAquaCheckEmail(emailText);
+
+    // Auto-capture salt from chlorinator
+    var salt = await getCurrentSalt();
+
     var stmt = db.prepare(`
-      INSERT INTO water_tests (test_date, total_hardness, total_chlorine, free_chlorine, combined_chlorine, ph, total_alkalinity, cyanuric_acid, source, raw_text)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO water_tests (test_date, total_hardness, total_chlorine, free_chlorine, combined_chlorine, ph, total_alkalinity, cyanuric_acid, salt, source, raw_text)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     var info = stmt.run(
       parsed.test_date,
@@ -862,6 +973,7 @@ app.post('/api/water-test/upload', function (req, res) {
       parsed.ph ?? null,
       parsed.total_alkalinity ?? null,
       parsed.cyanuric_acid ?? null,
+      salt,
       parsed.source || 'aquacheck',
       emailText
     );
@@ -876,16 +988,19 @@ app.post('/api/water-test/upload', function (req, res) {
 });
 
 // POST /api/water-test/manual — store manually entered values
-app.post('/api/water-test/manual', function (req, res) {
+app.post('/api/water-test/manual', async function (req, res) {
   try {
     var b = req.body;
     if (!b.test_date) {
       return res.status(400).json({ ok: false, error: 'test_date is required' });
     }
 
+    // Auto-capture salt from chlorinator if not provided
+    var salt = b.salt ?? await getCurrentSalt();
+
     var stmt = db.prepare(`
-      INSERT INTO water_tests (test_date, total_hardness, total_chlorine, free_chlorine, combined_chlorine, ph, total_alkalinity, cyanuric_acid, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual')
+      INSERT INTO water_tests (test_date, total_hardness, total_chlorine, free_chlorine, combined_chlorine, ph, total_alkalinity, cyanuric_acid, salt, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
     `);
     var info = stmt.run(
       b.test_date,
@@ -895,7 +1010,8 @@ app.post('/api/water-test/manual', function (req, res) {
       b.combined_chlorine ?? null,
       b.ph ?? null,
       b.total_alkalinity ?? null,
-      b.cyanuric_acid ?? null
+      b.cyanuric_acid ?? null,
+      salt
     );
 
     var test = db.prepare('SELECT * FROM water_tests WHERE id = ?').get(info.lastInsertRowid);

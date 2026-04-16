@@ -68,7 +68,7 @@ function TempGauge({ temp, setPoint, label, isOn }) {
           </linearGradient>
         </defs>
         {/* track */}
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={sw}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#334155" strokeWidth={sw}
           strokeDasharray={`${circ * arc} ${circ * (1 - arc)}`}
           strokeDashoffset={circ * (arc / 2 + 0.25)} strokeLinecap="round"
           transform={`rotate(0 ${cx} ${cy})`} />
@@ -80,9 +80,9 @@ function TempGauge({ temp, setPoint, label, isOn }) {
       </svg>
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 28, fontWeight: 700, color: 'white', fontFamily: "'JetBrains Mono', monospace",
+        <span style={{ fontSize: 28, fontWeight: 700, color: '#f1f5f9', fontFamily: "'JetBrains Mono', monospace",
           lineHeight: 1 }}>{temp ?? '--'}</span>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
           marginTop: 2 }}>SET {setPoint ?? '--'}&deg;F</span>
       </div>
     </div>
@@ -92,13 +92,13 @@ function TempGauge({ temp, setPoint, label, isOn }) {
 /* ── Metric Card ── */
 function Metric({ label, value, unit, color }) {
   return (
-    <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.025)', borderRadius: 8,
-      border: '1px solid rgba(255,255,255,0.06)' }}>
-      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+    <div style={{ padding: '14px 16px', background: '#1e293b', borderRadius: 10,
+      border: '1px solid #334155' }}>
+      <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
         textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 600, color: color || 'white',
+      <div style={{ fontSize: 20, fontWeight: 600, color: color || '#f1f5f9',
         fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>
-        {value}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 3 }}>{unit}</span>
+        {value}<span style={{ fontSize: 11, color: '#64748b', marginLeft: 3 }}>{unit}</span>
       </div>
     </div>
   );
@@ -131,8 +131,9 @@ export default function App() {
   const [chemData, setChemData] = useState(null);
   const [chemUploadText, setChemUploadText] = useState('');
   const [chemUploading, setChemUploading] = useState(false);
-  const [chemView, setChemView] = useState('overview'); // overview | upload | history
+  const [chemView, setChemView] = useState('overview'); // overview | history | upload | manual
   const [manualEntry, setManualEntry] = useState({ test_date: new Date().toISOString().split('T')[0] });
+  const [chartParam, setChartParam] = useState('free_chlorine');
 
   const showToast = (msg, type = 'info') => {
     setToast({ message: msg, type });
@@ -269,20 +270,20 @@ export default function App() {
   const alertCount = activeAlerts.length;
 
   const sevColors = {
-    alarm: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)', dot: '#ef4444', text: '#fca5a5' },
-    warning: { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)', dot: '#f59e0b', text: '#fcd34d' },
-    info: { bg: 'rgba(56,189,248,0.08)', border: 'rgba(56,189,248,0.25)', dot: '#38bdf8', text: '#7dd3fc' },
-    ok: { bg: 'rgba(74,222,128,0.06)', border: 'rgba(74,222,128,0.2)', dot: '#4ade80', text: '#86efac' },
+    alarm: { bg: '#1c1917', border: '#7f1d1d', dot: '#ef4444', text: '#fca5a5' },
+    warning: { bg: '#1c1917', border: '#78350f', dot: '#f59e0b', text: '#fcd34d' },
+    info: { bg: '#0c2340', border: '#155e75', dot: '#38bdf8', text: '#7dd3fc' },
+    ok: { bg: '#022c22', border: '#14532d', dot: '#4ade80', text: '#86efac' },
   };
 
   const inputStyle = {
-    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-    color: 'white', borderRadius: 6, padding: '8px 10px', fontSize: 12,
+    background: '#1e293b', border: '1px solid #334155',
+    color: '#f1f5f9', borderRadius: 8, padding: '9px 12px', fontSize: 12,
     fontFamily: "'JetBrains Mono', monospace", outline: 'none',
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0f1a', display: 'flex',
+    <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex',
       fontFamily: "'Inter', -apple-system, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
@@ -290,39 +291,40 @@ export default function App() {
         @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
         @keyframes glow { 0%,100% { box-shadow: 0 0 4px currentColor } 50% { box-shadow: 0 0 12px currentColor } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { margin: 0; background: #0a0f1a; }
+        body { margin: 0; background: #0f172a; }
         button { cursor: pointer; }
         button:hover:not(:disabled) { filter: brightness(1.1); }
         input, select { outline: none; }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
       `}</style>
 
       {/* ── Sidebar ── */}
       <nav style={{
-        width: 220, minHeight: '100vh', padding: '20px 12px',
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        width: 230, minHeight: '100vh', padding: '20px 14px',
+        background: '#020617',
+        borderRight: '1px solid #1e293b',
         display: 'flex', flexDirection: 'column', flexShrink: 0,
       }}>
         {/* Logo area */}
-        <div style={{ padding: '8px 12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 16 }}>
+        <div style={{ padding: '8px 10px 20px', borderBottom: '1px solid #1e293b', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8,
-              background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, color: 'white' }}>{'\u223F'}</div>
+            <svg width="34" height="34" viewBox="0 0 64 64" style={{ borderRadius: 10 }}>
+              <rect width="64" height="64" rx="12" fill="#0ea5e9"/>
+              <path d="M8 30 Q16 24 24 30 Q32 36 40 30 Q48 24 56 30" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round"/>
+              <path d="M8 42 Q16 36 24 42 Q32 48 40 42 Q48 36 56 42" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round"/>
+            </svg>
             <div>
-              <div style={{ color: 'white', fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>Matthews</div>
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 500 }}>Pool Control</div>
+              <div style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>Matthews</div>
+              <div style={{ color: '#64748b', fontSize: 11, fontWeight: 500 }}>Pool Control</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%',
+            <span style={{ width: 7, height: 7, borderRadius: '50%',
               background: status ? '#4ade80' : '#f59e0b',
-              boxShadow: status ? '0 0 6px #4ade80' : '0 0 6px #f59e0b' }} />
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)',
+              boxShadow: status ? '0 0 8px #4ade80' : '0 0 8px #f59e0b' }} />
+            <span style={{ fontSize: 10, color: '#94a3b8',
               fontFamily: "'JetBrains Mono', monospace" }}>
               {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Connecting...'}
             </span>
@@ -330,24 +332,23 @@ export default function App() {
         </div>
 
         {/* Nav items */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {['dashboard','pool controls','chlorinator','lights','schedules','water chemistry','alerts'].map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
-              background: activeTab === t ? 'rgba(255,255,255,0.06)' : 'transparent',
+              background: activeTab === t ? '#2563eb' : 'transparent',
               border: 'none',
-              borderLeft: activeTab === t ? '2px solid #3b82f6' : '2px solid transparent',
-              color: activeTab === t ? 'white' : 'rgba(255,255,255,0.35)',
-              borderRadius: '0 6px 6px 0', padding: '10px 14px', textAlign: 'left',
-              fontSize: 13, fontWeight: activeTab === t ? 500 : 400,
+              color: activeTab === t ? '#ffffff' : '#94a3b8',
+              borderRadius: 10, padding: '11px 14px', textAlign: 'left',
+              fontSize: 13, fontWeight: activeTab === t ? 600 : 500,
               transition: 'all 0.15s', width: '100%',
               display: 'flex', alignItems: 'center', gap: 10,
             }}>
               <span style={{ fontSize: 14, width: 20, textAlign: 'center',
-                opacity: activeTab === t ? 1 : 0.5 }}>{NAV_ICONS[t]}</span>
+                opacity: activeTab === t ? 1 : 0.7 }}>{NAV_ICONS[t]}</span>
               {t.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
               {t === 'alerts' && alertCount > 0 && (
                 <span style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 6px', borderRadius: 10,
-                  background: 'rgba(239,68,68,0.2)', color: '#fca5a5',
+                  background: '#ef444430', color: '#fca5a5',
                   fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{alertCount}</span>
               )}
             </button>
@@ -355,12 +356,12 @@ export default function App() {
         </div>
 
         {/* Bottom status */}
-        <div style={{ marginTop: 'auto', padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)',
+        <div style={{ marginTop: 'auto', padding: '16px 10px', borderTop: '1px solid #1e293b' }}>
+          <div style={{ fontSize: 10, color: '#64748b',
             fontFamily: "'JetBrains Mono', monospace" }}>
             EasyTouch2 4P
           </div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)',
+          <div style={{ fontSize: 10, color: '#475569',
             fontFamily: "'JetBrains Mono', monospace" }}>
             IC40 &middot; v5.2 b738
           </div>
@@ -388,15 +389,15 @@ export default function App() {
             <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
 
               {/* Pool gauge card */}
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+              <div style={{ background: '#1e293b', border: '1px solid #334155',
                 borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 20 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>Pool</span>
-                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4,
-                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
-                    background: pool?.isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)',
-                    color: pool?.isActive ? '#22d3ee' : 'rgba(255,255,255,0.3)',
-                    border: `1px solid ${pool?.isActive ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>Pool</span>
+                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6,
+                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
+                    background: pool?.isActive ? '#0e7490' : '#334155',
+                    color: pool?.isActive ? '#67e8f9' : '#94a3b8',
+                    border: `1px solid ${pool?.isActive ? '#155e75' : '#475569'}`,
                   }}>{pool?.isActive ? 'RUNNING' : 'STANDBY'}</span>
                 </div>
                 {pool && <TempGauge temp={pool.currentTemp} setPoint={pool.setPoint} label="Pool" isOn={pool.isActive} />}
@@ -420,8 +421,8 @@ export default function App() {
               {/* Right column */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Alerts banner */}
-                <div style={{ background: alertCount > 0 ? 'rgba(239,68,68,0.06)' : 'rgba(74,222,128,0.04)',
-                  border: `1px solid ${alertCount > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(74,222,128,0.12)'}`,
+                <div style={{ background: alertCount > 0 ? '#1c1917' : '#022c22',
+                  border: `1px solid ${alertCount > 0 ? '#7f1d1d' : '#14532d'}`,
                   borderRadius: 10, padding: '12px 16px' }}>
                   {alertCount === 0 ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -446,9 +447,9 @@ export default function App() {
                 </div>
 
                 {/* Quick circuits */}
-                <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                <div style={{ background: '#1e293b', border: '1px solid #334155',
                   borderRadius: 12, padding: '16px 18px', flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
                     textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12,
                     fontFamily: "'JetBrains Mono', monospace" }}>Pool Controls</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
@@ -458,16 +459,16 @@ export default function App() {
                         <button key={c.id} onClick={() => toggleCircuit(c.id, on ? 0 : 1)}
                           disabled={loading[c.id]}
                           style={{
-                            background: on ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
-                            border: `1px solid ${on ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.06)'}`,
-                            borderRadius: 6, padding: '10px 12px',
+                            background: on ? '#1e3a5f' : '#0f172a',
+                            border: `1px solid ${on ? '#2563eb' : '#334155'}`,
+                            borderRadius: 8, padding: '10px 12px',
                             display: 'flex', alignItems: 'center', gap: 8,
                             opacity: loading[c.id] ? 0.5 : 1, transition: 'all 0.15s',
                           }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                            background: on ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                            background: on ? '#3b82f6' : '#475569',
                             boxShadow: on ? '0 0 6px #3b82f6' : 'none' }} />
-                          <span style={{ fontSize: 12, color: on ? 'white' : 'rgba(255,255,255,0.4)',
+                          <span style={{ fontSize: 12, color: on ? '#e2e8f0' : '#94a3b8',
                             fontWeight: on ? 500 : 400 }}>{c.name}</span>
                         </button>
                       );
@@ -479,19 +480,19 @@ export default function App() {
 
             {/* Bottom row: System + Chlorinator */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+              <div style={{ background: '#1e293b', border: '1px solid #334155',
                 borderRadius: 12, padding: '16px 18px' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
                   textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
                   fontFamily: "'JetBrains Mono', monospace" }}>System</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                   {[
                     { l: 'Panel', v: sys.panelMode || '--', c: sys.panelMode === 'Auto' ? '#4ade80' : '#fbbf24' },
                     { l: 'Freeze', v: sys.freezeMode ? 'Active' : 'Off', c: sys.freezeMode ? '#fbbf24' : '#4ade80' },
-                    { l: 'Pool Delay', v: sys.poolDelay ? 'Active' : 'None', c: sys.poolDelay ? '#fbbf24' : 'rgba(255,255,255,0.25)' },
+                    { l: 'Pool Delay', v: sys.poolDelay ? 'Active' : 'None', c: sys.poolDelay ? '#fbbf24' : '#94a3b8' },
                   ].map((item, i) => (
                     <div key={i}>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                      <div style={{ fontSize: 10, color: '#94a3b8',
                         fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{item.l}</div>
                       <div style={{ fontSize: 13, color: item.c, fontWeight: 600,
                         fontFamily: "'JetBrains Mono', monospace" }}>{item.v}</div>
@@ -499,19 +500,19 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+              <div style={{ background: '#1e293b', border: '1px solid #334155',
                 borderRadius: 12, padding: '16px 18px' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
                   textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
                   fontFamily: "'JetBrains Mono', monospace" }}>Chlorinator</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                   {[
                     { l: 'Status', v: chlor.installed ? 'Online' : 'Offline', c: chlor.installed ? '#4ade80' : '#ef4444' },
-                    { l: 'Salt', v: chlor.salt != null ? `${chlor.salt}` : '--', c: (chlor.salt || 0) < 2700 ? '#fbbf24' : 'white' },
-                    { l: 'Output', v: chlor.poolSetPoint != null ? `${chlor.poolSetPoint}%` : '--', c: 'white' },
+                    { l: 'Salt', v: chlor.salt != null ? `${chlor.salt}` : '--', c: (chlor.salt || 0) < 2700 ? '#fbbf24' : '#e2e8f0' },
+                    { l: 'Output', v: chlor.poolSetPoint != null ? `${chlor.poolSetPoint}%` : '--', c: '#e2e8f0' },
                   ].map((item, i) => (
                     <div key={i}>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                      <div style={{ fontSize: 10, color: '#94a3b8',
                         fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{item.l}</div>
                       <div style={{ fontSize: 13, color: item.c, fontWeight: 600,
                         fontFamily: "'JetBrains Mono', monospace" }}>{item.v}</div>
@@ -526,9 +527,9 @@ export default function App() {
         {/* ─── CIRCUITS ─── */}
         {activeTab === 'pool controls' && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>
               Pool Controls</h2>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
               {circuits.length} circuits &middot; {circuits.filter(c => c.isOn).length} active</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
               {circuits.map(c => {
@@ -537,20 +538,20 @@ export default function App() {
                   <button key={c.id} onClick={() => toggleCircuit(c.id, on ? 0 : 1)}
                     disabled={loading[c.id]}
                     style={{
-                      background: on ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${on ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)'}`,
-                      borderRadius: 8, padding: '14px 16px',
+                      background: on ? '#1e3a5f' : '#1e293b',
+                      border: `1px solid ${on ? '#2563eb' : '#334155'}`,
+                      borderRadius: 10, padding: '14px 16px',
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       opacity: loading[c.id] ? 0.5 : 1, transition: 'all 0.15s',
                     }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                        background: on ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                        background: on ? '#3b82f6' : '#475569',
                         boxShadow: on ? '0 0 8px #3b82f6' : 'none' }} />
-                      <span style={{ fontSize: 13, color: on ? 'white' : 'rgba(255,255,255,0.4)',
+                      <span style={{ fontSize: 13, color: on ? '#e2e8f0' : '#94a3b8',
                         fontWeight: on ? 500 : 400 }}>{c.name}</span>
                     </div>
-                    <span style={{ fontSize: 10, color: on ? '#93c5fd' : 'rgba(255,255,255,0.2)',
+                    <span style={{ fontSize: 10, color: on ? '#93c5fd' : '#64748b',
                       fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
                       {on ? 'ON' : 'OFF'}
                     </span>
@@ -564,26 +565,26 @@ export default function App() {
         {/* ─── LIGHTS ─── */}
         {activeTab === 'lights' && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>Light Controls</h2>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Light Controls</h2>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 24 }}>
               IntelliBrite color modes</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
               {LIGHT_COMMANDS.map(lc => (
                 <button key={lc.cmd} onClick={() => sendLightCommand(lc.cmd)}
                   disabled={loading.lights}
                   style={{
-                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-                    borderRadius: 10, padding: '18px 12px',
+                    background: '#1e293b', border: '1px solid #334155',
+                    borderRadius: 12, padding: '18px 12px',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
                     transition: 'all 0.15s', opacity: loading.lights ? 0.4 : 1,
                     position: 'relative', overflow: 'hidden',
                   }}>
                   <div style={{ width: 24, height: 24, borderRadius: '50%', background: lc.color,
                     boxShadow: `0 0 16px ${lc.color}60`, position: 'relative', zIndex: 1 }} />
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 500,
+                  <span style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 500,
                     position: 'relative', zIndex: 1 }}>{lc.label}</span>
                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%',
-                    background: `linear-gradient(to top, ${lc.color}08, transparent)` }} />
+                    background: `linear-gradient(to top, ${lc.color}15, transparent)` }} />
                 </button>
               ))}
             </div>
@@ -593,8 +594,8 @@ export default function App() {
         {/* ─── CHLORINATOR ─── */}
         {activeTab === 'chlorinator' && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>IntelliChlor</h2>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>IntelliChlor</h2>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 24 }}>
               IC40 Salt Chlorine Generator</p>
 
             {chlorData ? (
@@ -609,14 +610,14 @@ export default function App() {
                   const dash = pct * circ * arc;
                   const color = '#84cc16';
                   return (
-                    <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                    <div style={{ background: '#1e293b', border: '1px solid #334155',
                       borderRadius: 12, padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
                         textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16,
                         fontFamily: "'JetBrains Mono', monospace" }}>Pool Output</div>
                       <div style={{ position: 'relative', width: 200, height: 200 }}>
                         <svg width="200" height="200" style={{ overflow: 'visible' }}>
-                          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={sw}
+                          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#334155" strokeWidth={sw}
                             strokeDasharray={`${circ * arc} ${circ * gap}`}
                             strokeDashoffset={circ * (arc / 2 + 0.25)} strokeLinecap="round"
                             transform={`rotate(0 ${cx} ${cy})`} />
@@ -629,7 +630,7 @@ export default function App() {
                           display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ fontSize: 48, fontWeight: 700, color: color,
                             fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>
-                            {chlorData.poolOutput ?? 0}<span style={{ fontSize: 24, color: 'rgba(255,255,255,0.3)' }}>%</span>
+                            {chlorData.poolOutput ?? 0}<span style={{ fontSize: 24, color: '#94a3b8' }}>%</span>
                           </span>
                         </div>
                       </div>
@@ -637,28 +638,28 @@ export default function App() {
                       <div style={{ width: '100%', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <button onClick={() => { const v = Math.max(0, (chlorOutput != null ? chlorOutput : chlorData.poolOutput) - 5); setChlorOutput(v); }}
-                            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
-                              background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 18, fontWeight: 600,
+                            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid #334155',
+                              background: '#0f172a', color: '#e2e8f0', fontSize: 18, fontWeight: 600,
                               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{'\u2212'}</button>
                           <input type="range" min="0" max="100" step="5"
                             value={chlorOutput != null ? chlorOutput : chlorData.poolOutput}
                             onChange={e => setChlorOutput(parseInt(e.target.value))}
                             style={{ flex: 1, accentColor: '#84cc16', height: 4, cursor: 'pointer' }} />
                           <button onClick={() => { const v = Math.min(100, (chlorOutput != null ? chlorOutput : chlorData.poolOutput) + 5); setChlorOutput(v); }}
-                            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
-                              background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 18, fontWeight: 600,
+                            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid #334155',
+                              background: '#0f172a', color: '#e2e8f0', fontSize: 18, fontWeight: 600,
                               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                         </div>
                         {chlorOutput != null && chlorOutput !== chlorData.poolOutput && (
                           <div style={{ display: 'flex', gap: 8 }}>
                             <button onClick={() => setChlorOutput(null)}
-                              style={{ flex: 1, padding: '8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
-                                background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)',
+                              style={{ flex: 1, padding: '8px', borderRadius: 6, border: '1px solid #334155',
+                                background: '#0f172a', color: '#94a3b8',
                                 fontSize: 12, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>Cancel</button>
                             <button onClick={() => { setChlorSetPoint(chlorOutput); setChlorOutput(null); }}
                               disabled={loading.chlor}
                               style={{ flex: 1, padding: '8px', borderRadius: 6, border: 'none',
-                                background: '#84cc16', color: '#0a0f1a',
+                                background: '#84cc16', color: '#0f172a',
                                 fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
                                 opacity: loading.chlor ? 0.5 : 1 }}>
                               Set {chlorOutput}%
@@ -673,9 +674,9 @@ export default function App() {
                 {/* Right column: Salt, Super Chlorination, Status */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {/* Salt Level */}
-                  <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                  <div style={{ background: '#1e293b', border: '1px solid #334155',
                     borderRadius: 12, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)',
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1',
                       textTransform: 'uppercase', letterSpacing: '0.08em',
                       fontFamily: "'JetBrains Mono', monospace" }}>Salt Level</span>
                     <span style={{ fontSize: 24, fontWeight: 700,
@@ -686,23 +687,23 @@ export default function App() {
                   </div>
 
                   {/* Super Chlorination */}
-                  <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                  <div style={{ background: '#1e293b', border: '1px solid #334155',
                     borderRadius: 12, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)',
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1',
                       textTransform: 'uppercase', letterSpacing: '0.08em',
                       fontFamily: "'JetBrains Mono', monospace" }}>Super Chlorination</span>
                     <span style={{ fontSize: 13, fontWeight: 600, padding: '6px 16px', borderRadius: 6,
                       fontFamily: "'JetBrains Mono', monospace",
-                      background: chlorData.isActive && (chlor.superChlorTimer > 0) ? 'rgba(132,204,22,0.15)' : 'rgba(255,255,255,0.04)',
-                      color: chlorData.isActive && (chlor.superChlorTimer > 0) ? '#84cc16' : 'rgba(255,255,255,0.4)',
-                      border: `1px solid ${chlorData.isActive && (chlor.superChlorTimer > 0) ? 'rgba(132,204,22,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      background: chlorData.isActive && (chlor.superChlorTimer > 0) ? '#1a2e05' : '#0f172a',
+                      color: chlorData.isActive && (chlor.superChlorTimer > 0) ? '#84cc16' : '#94a3b8',
+                      border: `1px solid ${chlorData.isActive && (chlor.superChlorTimer > 0) ? '#365314' : '#334155'}`,
                     }}>{chlorData.isActive && (chlor.superChlorTimer > 0) ? 'On' : 'Off'}</span>
                   </div>
 
                   {/* Status */}
-                  <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                  <div style={{ background: '#1e293b', border: '1px solid #334155',
                     borderRadius: 12, padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)',
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1',
                       textTransform: 'uppercase', letterSpacing: '0.08em',
                       fontFamily: "'JetBrains Mono', monospace" }}>Status</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -720,7 +721,7 @@ export default function App() {
               </div>
             ) : (
               <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>Loading chlorinator data...</div>
+                <div style={{ fontSize: 14, color: '#94a3b8' }}>Loading chlorinator data...</div>
               </div>
             )}
           </div>
@@ -729,8 +730,8 @@ export default function App() {
         {/* ─── SCHEDULES ─── */}
         {activeTab === 'schedules' && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>Schedules</h2>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Schedules</h2>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
               {schedulesData ? `${schedulesData.schedules.length} scheduled programs` : 'Loading...'}</p>
 
             {schedulesData && schedulesData.schedules.length > 0 && (
@@ -739,7 +740,7 @@ export default function App() {
                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
                   gap: 8, padding: '0 16px 10px', alignItems: 'center' }}>
                   {['', 'Circuit', 'Start', 'Stop', 'Days', 'Status'].map((h, i) => (
-                    <div key={i} style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                    <div key={i} style={{ fontSize: 10, color: '#94a3b8',
                       fontFamily: "'JetBrains Mono', monospace", textTransform: 'uppercase',
                       letterSpacing: '0.08em', fontWeight: 600 }}>{h}</div>
                   ))}
@@ -762,32 +763,32 @@ export default function App() {
                       <div key={s.id} style={{
                         display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
                         gap: 8, padding: '14px 16px', alignItems: 'center',
-                        background: s.isActive ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.02)',
-                        border: `1px solid ${s.isActive ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)'}`,
-                        borderRadius: 8,
+                        background: s.isActive ? '#1e3a5f' : '#1e293b',
+                        border: `1px solid ${s.isActive ? '#2563eb' : '#334155'}`,
+                        borderRadius: 10,
                       }}>
                         {/* Active indicator */}
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                           <span style={{ width: 8, height: 8, borderRadius: '50%',
-                            background: s.isActive ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                            background: s.isActive ? '#3b82f6' : '#475569',
                             boxShadow: s.isActive ? '0 0 8px #3b82f6' : 'none',
                             animation: s.isActive ? 'pulse 2s ease infinite' : 'none' }} />
                         </div>
 
                         {/* Circuit name */}
                         <div style={{ fontSize: 13, fontWeight: s.isActive ? 600 : 400,
-                          color: s.isActive ? 'white' : 'rgba(255,255,255,0.6)' }}>
+                          color: s.isActive ? '#f1f5f9' : '#94a3b8' }}>
                           {s.circuitName}
                         </div>
 
                         {/* Start */}
-                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)',
+                        <div style={{ fontSize: 13, color: '#cbd5e1',
                           fontFamily: "'JetBrains Mono', monospace" }}>
                           {fmtTime(startH, startM)}
                         </div>
 
                         {/* Stop */}
-                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)',
+                        <div style={{ fontSize: 13, color: '#cbd5e1',
                           fontFamily: "'JetBrains Mono', monospace" }}>
                           {fmtTime(stopH, stopM)}
                         </div>
@@ -803,9 +804,9 @@ export default function App() {
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 fontSize: 9, fontWeight: 600,
                                 fontFamily: "'JetBrains Mono', monospace",
-                                background: isOn ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)',
-                                color: isOn ? '#93c5fd' : 'rgba(255,255,255,0.15)',
-                                border: `1px solid ${isOn ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.05)'}`,
+                                background: isOn ? '#1e3a5f' : '#0f172a',
+                                color: isOn ? '#93c5fd' : '#475569',
+                                border: `1px solid ${isOn ? '#2563eb' : '#1e293b'}`,
                               }}>{d}</span>
                             );
                           })}
@@ -813,11 +814,11 @@ export default function App() {
 
                         {/* Status */}
                         <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4,
+                          <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6,
                             fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
-                            background: s.isActive ? 'rgba(59,130,246,0.15)' : s.runsToday ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
-                            color: s.isActive ? '#60a5fa' : s.runsToday ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.15)',
-                            border: `1px solid ${s.isActive ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                            background: s.isActive ? '#1e3a5f' : '#0f172a',
+                            color: s.isActive ? '#60a5fa' : s.runsToday ? '#94a3b8' : '#475569',
+                            border: `1px solid ${s.isActive ? '#2563eb' : '#334155'}`,
                           }}>{s.isActive ? 'ACTIVE' : s.runsToday ? 'TODAY' : 'IDLE'}</span>
                         </div>
                       </div>
@@ -829,7 +830,7 @@ export default function App() {
 
             {schedulesData && schedulesData.schedules.length === 0 && (
               <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>No schedules configured</div>
+                <div style={{ fontSize: 14, color: '#94a3b8' }}>No schedules configured</div>
               </div>
             )}
           </div>
@@ -840,17 +841,17 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>Water Chemistry</h2>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Water Chemistry</h2>
+                <p style={{ fontSize: 12, color: '#94a3b8' }}>
                   {chemData?.tests?.length || 0} test results on record</p>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                {['overview', 'upload', 'manual', 'history'].map(v => (
+                {['overview', 'history', 'upload', 'manual'].map(v => (
                   <button key={v} onClick={() => setChemView(v)} style={{
-                    background: chemView === v ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${chemView === v ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                    color: chemView === v ? '#93c5fd' : 'rgba(255,255,255,0.4)',
-                    borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 500,
+                    background: chemView === v ? '#2563eb' : '#1e293b',
+                    border: `1px solid ${chemView === v ? '#2563eb' : '#334155'}`,
+                    color: chemView === v ? '#ffffff' : '#94a3b8',
+                    borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 500,
                   }}>{v.charAt(0).toUpperCase() + v.slice(1)}</button>
                 ))}
               </div>
@@ -861,33 +862,34 @@ export default function App() {
               <div>
                 {chemData?.latest ? (
                   <div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace",
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
                       textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
                       Latest Test — {new Date(chemData.latest.test_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                     </div>
 
-                    {/* Parameter cards */}
+                    {/* Parameter cards — use live salt from chlorinator if not stored in test */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
                       {Object.entries(chemData.idealRanges || {}).map(([key, range]) => {
-                        const val = chemData.latest[key];
+                        let val = chemData.latest[key];
+                        if (val == null && key === 'salt' && chlorData?.saltPPM) val = chlorData.saltPPM;
                         if (val == null) return null;
                         let statusColor = '#4ade80'; // ok
                         let statusText = 'OK';
                         if (val < range.min) { statusColor = '#fbbf24'; statusText = 'LOW'; }
                         else if (val > range.max) { statusColor = '#ef4444'; statusText = 'HIGH'; }
                         return (
-                          <div key={key} style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+                          <div key={key} style={{ background: '#1e293b', border: '1px solid #334155',
                             borderRadius: 10, padding: '16px', position: 'relative', overflow: 'hidden' }}>
                             <div style={{ position: 'absolute', top: 0, right: 0, padding: '4px 10px', borderRadius: '0 10px 0 8px',
-                              background: `${statusColor}15`, fontSize: 9, fontWeight: 700, color: statusColor,
+                              background: `${statusColor}20`, fontSize: 9, fontWeight: 700, color: statusColor,
                               fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.05em' }}>{statusText}</div>
-                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+                            <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
                               textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{range.label}</div>
                             <div style={{ fontSize: 24, fontWeight: 700, color: statusColor,
                               fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, marginBottom: 6 }}>
-                              {val}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 3 }}>{range.unit}</span>
+                              {val}<span style={{ fontSize: 11, color: '#64748b', marginLeft: 3 }}>{range.unit}</span>
                             </div>
-                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>
+                            <div style={{ fontSize: 10, color: '#64748b', fontFamily: "'JetBrains Mono', monospace" }}>
                               Ideal: {range.min} - {range.max}
                             </div>
                           </div>
@@ -898,22 +900,22 @@ export default function App() {
                     {/* Recommendations */}
                     {chemData.recommendations?.length > 0 && (
                       <div>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace",
+                        <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
                           textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Recommendations</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {chemData.recommendations.map((rec, i) => {
                             const color = rec.status === 'high' ? '#ef4444' : '#fbbf24';
                             return (
-                              <div key={i} style={{ background: `${color}08`, border: `1px solid ${color}20`,
+                              <div key={i} style={{ background: `${color}10`, border: `1px solid ${color}30`,
                                 borderRadius: 10, padding: '14px 18px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                                 <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, marginTop: 3,
                                   background: color, boxShadow: `0 0 6px ${color}` }} />
                                 <div>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: 'white', marginBottom: 4 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>
                                     {rec.parameter}: <span style={{ color }}>{rec.value} {chemData.idealRanges[Object.keys(chemData.idealRanges).find(k => chemData.idealRanges[k].label === rec.parameter)]?.unit}</span>
-                                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 8 }}>Ideal: {rec.ideal}</span>
+                                    <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 8 }}>Ideal: {rec.ideal}</span>
                                   </div>
-                                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>{rec.action}</div>
+                                  <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.5 }}>{rec.action}</div>
                                 </div>
                               </div>
                             );
@@ -925,17 +927,17 @@ export default function App() {
                     {chemData.recommendations?.length === 0 && (
                       <div style={{ padding: '24px 0', textAlign: 'center' }}>
                         <div style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 12px',
-                          background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)',
+                          background: '#052e16', border: '1px solid #14532d',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#4ade80' }}>{'\u2713'}</div>
-                        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>All levels within ideal range</div>
+                        <div style={{ fontSize: 14, color: '#cbd5e1', fontWeight: 500 }}>All levels within ideal range</div>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div style={{ padding: '60px 0', textAlign: 'center' }}>
-                    <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.2 }}>{'\u2697'}</div>
-                    <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>No water test results yet</div>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginBottom: 20 }}>Upload an AquaCheck email or enter results manually</div>
+                    <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>{'\u2697'}</div>
+                    <div style={{ fontSize: 14, color: '#cbd5e1', marginBottom: 8 }}>No water test results yet</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>Upload an AquaCheck email or enter results manually</div>
                     <button onClick={() => setChemView('upload')} style={{
                       background: '#3b82f6', border: 'none', color: 'white', borderRadius: 8,
                       padding: '10px 24px', fontSize: 13, fontWeight: 600 }}>Upload Results</button>
@@ -946,27 +948,27 @@ export default function App() {
 
             {/* ── Upload: Paste email text ── */}
             {chemView === 'upload' && (
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+              <div style={{ background: '#1e293b', border: '1px solid #334155',
                 borderRadius: 12, padding: 24 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
                   textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4,
                   fontFamily: "'JetBrains Mono', monospace" }}>Paste AquaCheck Email</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
                   Copy the full email text from your AquaCheck results and paste it below</div>
                 <textarea
                   value={chemUploadText}
                   onChange={e => setChemUploadText(e.target.value)}
                   placeholder={'AquaCheck Select Results\n13 April 2026\n\nTotal Hardness - 250 ppm\nYour value is 250 ppm...\n\nFree Chlorine - 1.0 ppm\n...\n\npH - 7.4 pH\n...'}
                   style={{
-                    width: '100%', minHeight: 260, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)',
-                    color: 'white', borderRadius: 8, padding: 16, fontSize: 13, lineHeight: 1.6,
+                    width: '100%', minHeight: 260, background: '#0f172a', border: '1px solid #334155',
+                    color: '#f1f5f9', borderRadius: 8, padding: 16, fontSize: 13, lineHeight: 1.6,
                     fontFamily: "'JetBrains Mono', monospace", resize: 'vertical', outline: 'none',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
                   <button onClick={() => { setChemUploadText(''); setChemView('overview'); }}
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'rgba(255,255,255,0.5)', borderRadius: 6, padding: '10px 20px', fontSize: 12, fontWeight: 600 }}>
+                    style={{ background: '#0f172a', border: '1px solid #334155',
+                      color: '#94a3b8', borderRadius: 8, padding: '10px 20px', fontSize: 12, fontWeight: 600 }}>
                     Cancel</button>
                   <button onClick={() => uploadChemEmail(chemUploadText)}
                     disabled={!chemUploadText.trim() || chemUploading}
@@ -980,14 +982,14 @@ export default function App() {
 
             {/* ── Manual Entry ── */}
             {chemView === 'manual' && (
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+              <div style={{ background: '#1e293b', border: '1px solid #334155',
                 borderRadius: 12, padding: 24 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
                   textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16,
                   fontFamily: "'JetBrains Mono', monospace" }}>Manual Entry</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+                    <label style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
                       textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 4 }}>Test Date</label>
                     <input type="date" value={manualEntry.test_date || ''}
                       onChange={e => setManualEntry(m => ({ ...m, test_date: e.target.value }))}
@@ -1000,9 +1002,10 @@ export default function App() {
                     { key: 'total_alkalinity', label: 'Total Alkalinity (ppm)' },
                     { key: 'cyanuric_acid', label: 'Cyanuric Acid (ppm)' },
                     { key: 'total_hardness', label: 'Total Hardness (ppm)' },
+                    { key: 'salt', label: 'Salt (ppm)' },
                   ].map(f => (
                     <div key={f.key}>
-                      <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace",
+                      <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', fontFamily: "'JetBrains Mono', monospace",
                         textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 4 }}>{f.label}</label>
                       <input type="number" step="0.1" placeholder="--"
                         value={manualEntry[f.key] ?? ''}
@@ -1013,8 +1016,8 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
                   <button onClick={() => { setManualEntry({ test_date: new Date().toISOString().split('T')[0] }); setChemView('overview'); }}
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'rgba(255,255,255,0.5)', borderRadius: 6, padding: '10px 20px', fontSize: 12, fontWeight: 600 }}>
+                    style={{ background: '#0f172a', border: '1px solid #334155',
+                      color: '#94a3b8', borderRadius: 8, padding: '10px 20px', fontSize: 12, fontWeight: 600 }}>
                     Cancel</button>
                   <button onClick={submitManualEntry}
                     disabled={chemUploading}
@@ -1026,82 +1029,256 @@ export default function App() {
               </div>
             )}
 
-            {/* ── History: All test results ── */}
+            {/* ── History: Charts + Table ── */}
             {chemView === 'history' && (
               <div>
                 {chemData?.tests?.length > 0 ? (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
-                      <thead>
-                        <tr>
-                          {['Date', 'FC', 'TC', 'pH', 'TA', 'CH', 'CYA', 'Source', ''].map((h, i) => (
-                            <th key={i} style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace",
-                              textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600,
-                              padding: '0 12px 8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {chemData.tests.map(t => {
-                          const ranges = chemData.idealRanges || {};
-                          const cellColor = (key, val) => {
-                            if (val == null) return 'rgba(255,255,255,0.2)';
-                            const r = ranges[key];
-                            if (!r) return 'white';
-                            if (val < r.min) return '#fbbf24';
-                            if (val > r.max) return '#ef4444';
-                            return '#4ade80';
-                          };
-                          return (
-                            <tr key={t.id} style={{ background: 'rgba(255,255,255,0.02)' }}>
-                              <td style={{ padding: '12px', borderRadius: '8px 0 0 8px', fontSize: 12, color: 'rgba(255,255,255,0.7)',
-                                fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>
-                                {new Date(t.test_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </td>
-                              {[
-                                { key: 'free_chlorine', val: t.free_chlorine },
-                                { key: 'total_chlorine', val: t.total_chlorine },
-                                { key: 'ph', val: t.ph },
-                                { key: 'total_alkalinity', val: t.total_alkalinity },
-                                { key: 'total_hardness', val: t.total_hardness },
-                                { key: 'cyanuric_acid', val: t.cyanuric_acid },
-                              ].map((c, i) => (
-                                <td key={i} style={{ padding: '12px', fontSize: 13, fontWeight: 600,
-                                  color: cellColor(c.key, c.val), fontFamily: "'JetBrains Mono', monospace" }}>
-                                  {c.val != null ? c.val : '--'}
-                                </td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* ── Trend Chart ── */}
+                    {chemData.tests.length > 1 && (() => {
+                      const tests = [...(chemData.tests || [])].reverse();
+                      const PARAMS = [
+                        { key: 'total_hardness', abbr: 'TH', label: 'Total Hardness', color: '#3b82f6' },
+                        { key: 'total_chlorine', abbr: 'TC', label: 'Total Chlorine', color: '#4ade80' },
+                        { key: 'free_chlorine', abbr: 'FC', label: 'Free Chlorine', color: '#a78bfa' },
+                        { key: 'ph', abbr: 'pH', label: 'pH', color: '#f472b6' },
+                        { key: 'total_alkalinity', abbr: 'TA', label: 'Total Alkalinity', color: '#22d3ee' },
+                        { key: 'cyanuric_acid', abbr: 'CA', label: 'Cyanuric Acid', color: '#fbbf24' },
+                        { key: 'salt', abbr: 'NaCl', label: 'Salt', color: '#fb923c' },
+                      ];
+
+                      const active = PARAMS.find(p => p.key === chartParam) || PARAMS[0];
+                      const range = chemData.idealRanges?.[active.key];
+
+                      // Chart dimensions
+                      const W = 900, H = 380, PAD = { top: 20, right: 30, bottom: 50, left: 60 };
+                      const chartW = W - PAD.left - PAD.right;
+                      const chartH = H - PAD.top - PAD.bottom;
+
+                      // Compute Y range
+                      const vals = tests.map(t => t[active.key]).filter(v => v != null);
+                      let yMin = vals.length ? Math.min(...vals) : 0;
+                      let yMax = vals.length ? Math.max(...vals) : 10;
+                      if (range) { yMin = Math.min(yMin, range.min); yMax = Math.max(yMax, range.max); }
+                      const yPad = Math.max((yMax - yMin) * 0.15, 0.5);
+                      yMin = Math.max(0, yMin - yPad);
+                      yMax = yMax + yPad;
+
+                      const toX = (i) => PAD.left + (tests.length > 1 ? (i / (tests.length - 1)) * chartW : chartW / 2);
+                      const toY = (v) => PAD.top + chartH - ((v - yMin) / (yMax - yMin)) * chartH;
+
+                      const yTickCount = 5;
+                      const yTicks = Array.from({ length: yTickCount + 1 }, (_, i) => {
+                        const v = yMin + (yMax - yMin) * (i / yTickCount);
+                        return Math.round(v * 10) / 10;
+                      });
+
+                      const points = tests.map((t, i) => t[active.key] != null ? { x: toX(i), y: toY(t[active.key]), val: t[active.key], date: t.test_date } : null).filter(Boolean);
+                      const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`).join(' ');
+
+                      // Gradient fill under the line
+                      const areaD = points.length > 1 ? pathD + ` L ${points[points.length-1].x} ${PAD.top + chartH} L ${points[0].x} ${PAD.top + chartH} Z` : '';
+
+                      return (
+                        <div style={{ background: '#1e293b',
+                          border: '1px solid #334155', borderRadius: 16, padding: '28px 24px 20px' }}>
+
+                          {/* Header row */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                            <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>History</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace" }}>
+                              Last {Math.min(tests.length, 50)} tests
+                            </div>
+                          </div>
+
+                          {/* Parameter toggles */}
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginBottom: 6 }}>
+                            {PARAMS.map(p => {
+                              const isActive = p.key === chartParam;
+                              return (
+                                <button key={p.key} onClick={() => setChartParam(p.key)}
+                                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                                    transition: 'transform 0.15s', transform: isActive ? 'scale(1.08)' : 'scale(1)' }}>
+                                  <div style={{
+                                    width: 54, height: 54, borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: isActive ? p.color : 'transparent',
+                                    border: `2.5px solid ${isActive ? p.color : p.color + '55'}`,
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: isActive ? `0 0 20px ${p.color}50, inset 0 0 8px rgba(255,255,255,0.15)` : 'none',
+                                  }}>
+                                    <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.02em',
+                                      color: isActive ? '#0f172a' : p.color + '80',
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      textShadow: isActive ? 'none' : `0 0 6px ${p.color}30` }}>{p.abbr}</span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Active parameter label + ideal range */}
+                          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: active.color,
+                              letterSpacing: '0.02em' }}>{active.label}</span>
+                            {range && (
+                              <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 12,
+                                fontFamily: "'JetBrains Mono', monospace" }}>Ideal: {range.min} – {range.max} {range.unit}</span>
+                            )}
+                          </div>
+
+                          {/* Chart */}
+                          {vals.length > 0 ? (
+                            <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+                              <defs>
+                                <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor={active.color} stopOpacity="0.25" />
+                                  <stop offset="100%" stopColor={active.color} stopOpacity="0.02" />
+                                </linearGradient>
+                              </defs>
+
+                              {/* Grid lines */}
+                              {yTicks.map((tick, i) => (
+                                <g key={i}>
+                                  <line x1={PAD.left} y1={toY(tick)} x2={W - PAD.right} y2={toY(tick)}
+                                    stroke="#334155" strokeWidth="1" />
+                                  <text x={PAD.left - 12} y={toY(tick) + 5} textAnchor="end"
+                                    fill="#94a3b8" fontSize="12" fontWeight="600" fontFamily="'JetBrains Mono', monospace">
+                                    {tick % 1 === 0 ? tick : tick.toFixed(1)}
+                                  </text>
+                                </g>
                               ))}
-                              <td style={{ padding: '12px', fontSize: 10, color: 'rgba(255,255,255,0.25)',
-                                fontFamily: "'JetBrains Mono', monospace" }}>{t.source}</td>
-                              <td style={{ padding: '12px', borderRadius: '0 8px 8px 0', textAlign: 'right' }}>
-                                <button onClick={() => deleteChemTest(t.id)}
-                                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
-                                    color: '#fca5a5', borderRadius: 4, padding: '4px 10px', fontSize: 10,
-                                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>DEL</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {/* Legend */}
-                    <div style={{ display: 'flex', gap: 16, marginTop: 12, padding: '0 12px' }}>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: "'JetBrains Mono', monospace" }}>
-                        FC = Free Chlorine &middot; TC = Total Chlorine &middot; TA = Total Alkalinity &middot; CH = Calcium Hardness &middot; CYA = Cyanuric Acid
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, marginTop: 6, padding: '0 12px' }}>
-                      {[{ c: '#4ade80', l: 'OK' }, { c: '#fbbf24', l: 'Low' }, { c: '#ef4444', l: 'High' }].map(s => (
-                        <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.c }} />
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>{s.l}</span>
+
+                              {/* Ideal range band */}
+                              {range && (
+                                <rect x={PAD.left} y={toY(range.max)} width={chartW}
+                                  height={Math.max(0, toY(range.min) - toY(range.max))}
+                                  fill={active.color} opacity="0.08" rx="4" />
+                              )}
+                              {range && (
+                                <g>
+                                  <line x1={PAD.left} y1={toY(range.max)} x2={W - PAD.right} y2={toY(range.max)}
+                                    stroke={active.color} strokeWidth="1" strokeDasharray="6 4" opacity="0.4" />
+                                  <line x1={PAD.left} y1={toY(range.min)} x2={W - PAD.right} y2={toY(range.min)}
+                                    stroke={active.color} strokeWidth="1" strokeDasharray="6 4" opacity="0.4" />
+                                </g>
+                              )}
+
+                              {/* Area fill */}
+                              {points.length > 1 && (
+                                <path d={areaD} fill="url(#chartFill)" />
+                              )}
+
+                              {/* Line */}
+                              <path d={pathD} fill="none" stroke={active.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"
+                                style={{ filter: `drop-shadow(0 0 6px ${active.color}60)` }} />
+
+                              {/* Data points */}
+                              {points.map((pt, i) => (
+                                <g key={i}>
+                                  <circle cx={pt.x} cy={pt.y} r="6" fill="#1e293b" stroke={active.color} strokeWidth="2.5"
+                                    style={{ filter: `drop-shadow(0 0 4px ${active.color}40)` }} />
+                                  <title>{active.label}: {pt.val} {range?.unit || ''} — {new Date(pt.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</title>
+                                </g>
+                              ))}
+
+                              {/* X-axis date labels */}
+                              {tests.map((t, i) => {
+                                if (t[active.key] == null) return null;
+                                if (tests.length > 12 && i % Math.ceil(tests.length / 8) !== 0 && i !== tests.length - 1) return null;
+                                const d = new Date(t.test_date + 'T12:00:00');
+                                return (
+                                  <text key={i} x={toX(i)} y={H - 8} textAnchor="middle"
+                                    fill="#94a3b8" fontSize="11" fontWeight="500" fontFamily="'JetBrains Mono', monospace">
+                                    {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </text>
+                                );
+                              })}
+                            </svg>
+                          ) : (
+                            <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                              <div style={{ fontSize: 13, color: '#94a3b8' }}>No {active.label} data recorded</div>
+                            </div>
+                          )}
                         </div>
-                      ))}
+                      );
+                    })()}
+
+                    {/* ── Data Table ── */}
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
+                        <thead>
+                          <tr>
+                            {['Date', 'FC', 'TC', 'pH', 'TA', 'CH', 'CYA', 'Salt', 'Source', ''].map((h, i) => (
+                              <th key={i} style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace",
+                                textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600,
+                                padding: '0 12px 8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {chemData.tests.map(t => {
+                            const ranges = chemData.idealRanges || {};
+                            const cellColor = (key, val) => {
+                              if (val == null) return '#64748b';
+                              const r = ranges[key];
+                              if (!r) return '#e2e8f0';
+                              if (val < r.min) return '#fbbf24';
+                              if (val > r.max) return '#ef4444';
+                              return '#4ade80';
+                            };
+                            return (
+                              <tr key={t.id} style={{ background: '#1e293b' }}>
+                                <td style={{ padding: '12px', borderRadius: '8px 0 0 8px', fontSize: 12, color: '#cbd5e1',
+                                  fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>
+                                  {new Date(t.test_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </td>
+                                {[
+                                  { key: 'free_chlorine', val: t.free_chlorine },
+                                  { key: 'total_chlorine', val: t.total_chlorine },
+                                  { key: 'ph', val: t.ph },
+                                  { key: 'total_alkalinity', val: t.total_alkalinity },
+                                  { key: 'total_hardness', val: t.total_hardness },
+                                  { key: 'cyanuric_acid', val: t.cyanuric_acid },
+                                  { key: 'salt', val: t.salt },
+                                ].map((c, i) => (
+                                  <td key={i} style={{ padding: '12px', fontSize: 13, fontWeight: 600,
+                                    color: cellColor(c.key, c.val), fontFamily: "'JetBrains Mono', monospace" }}>
+                                    {c.val != null ? c.val : '--'}
+                                  </td>
+                                ))}
+                                <td style={{ padding: '12px', fontSize: 10, color: '#64748b',
+                                  fontFamily: "'JetBrains Mono', monospace" }}>{t.source}</td>
+                                <td style={{ padding: '12px', borderRadius: '0 8px 8px 0', textAlign: 'right' }}>
+                                  <button onClick={() => deleteChemTest(t.id)}
+                                    style={{ background: '#450a0a', border: '1px solid #7f1d1d',
+                                      color: '#fca5a5', borderRadius: 6, padding: '4px 10px', fontSize: 10,
+                                      fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>DEL</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{ display: 'flex', gap: 16, marginTop: 12, padding: '0 12px' }}>
+                        <div style={{ fontSize: 10, color: '#64748b', fontFamily: "'JetBrains Mono', monospace" }}>
+                          FC = Free Chlorine &middot; TC = Total Chlorine &middot; TA = Total Alkalinity &middot; CH = Calcium Hardness &middot; CYA = Cyanuric Acid &middot; Salt = Salt (ppm)
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, marginTop: 6, padding: '0 12px' }}>
+                        {[{ c: '#4ade80', l: 'OK' }, { c: '#fbbf24', l: 'Low' }, { c: '#ef4444', l: 'High' }].map(s => (
+                          <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.c }} />
+                            <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace" }}>{s.l}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : (
                   <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                    <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>No test results yet</div>
+                    <div style={{ fontSize: 14, color: '#94a3b8' }}>No test results yet</div>
                   </div>
                 )}
               </div>
@@ -1112,25 +1289,25 @@ export default function App() {
         {/* ─── ALERTS ─── */}
         {activeTab === 'alerts' && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>
               Active Alerts
               {alertCount > 0 && (
                 <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                  background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
+                  background: '#450a0a', color: '#fca5a5',
                   fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{alertCount}</span>
               )}
             </h2>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
               Real-time equipment alerts and warnings</p>
 
             {alertCount === 0 ? (
               <div style={{ padding: '40px 0', textAlign: 'center' }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px',
-                  background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)',
+                  background: '#052e16', border: '1px solid #14532d',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 20, color: '#4ade80' }}>{'\u2713'}</div>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>All systems nominal</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', marginTop: 4 }}>No active alerts</div>
+                <div style={{ fontSize: 14, color: '#cbd5e1', fontWeight: 500 }}>All systems nominal</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>No active alerts</div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1152,10 +1329,10 @@ export default function App() {
                             background: `${sc.dot}15`, textTransform: 'uppercase' }}>
                             {a.severity}
                           </span>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)',
+                          <span style={{ fontSize: 10, color: '#94a3b8',
                             fontFamily: "'JetBrains Mono', monospace" }}>{a.source}</span>
                         </div>
-                        <div style={{ fontSize: 14, color: 'white', fontWeight: 500 }}>
+                        <div style={{ fontSize: 14, color: '#f1f5f9', fontWeight: 500 }}>
                           {a.source}: {a.message}
                         </div>
                       </div>
@@ -1171,10 +1348,10 @@ export default function App() {
         {!status && (
           <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
             textAlign: 'center' }}>
-            <div style={{ width: 40, height: 40, border: '2px solid rgba(255,255,255,0.1)',
+            <div style={{ width: 40, height: 40, border: '2px solid #334155',
               borderTopColor: '#3b82f6', borderRadius: '50%', margin: '0 auto 16px',
               animation: 'spin 1s linear infinite' }} />
-            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13,
+            <div style={{ color: '#94a3b8', fontSize: 13,
               fontFamily: "'JetBrains Mono', monospace" }}>Connecting to gateway...</div>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           </div>
