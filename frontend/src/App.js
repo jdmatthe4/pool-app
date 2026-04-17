@@ -4,22 +4,68 @@ const API = process.env.REACT_APP_API_URL || '';
 
 const HEAT_MODES = ['Off', 'Solar', 'Solar Preferred', 'Heater', 'Dual Heat'];
 
-const LIGHT_COMMANDS = [
-  { label: 'Off',        cmd: 0, color: '#64748b', icon: '\u25CB' },
-  { label: 'On',         cmd: 1, color: '#facc15', icon: '\u2600' },
-  { label: 'Color Set',  cmd: 2, color: '#a78bfa', icon: '\u25C9' },
-  { label: 'Color Sync', cmd: 3, color: '#60a5fa', icon: '\u21BB' },
-  { label: 'Party',      cmd: 5, color: '#f472b6', icon: '\u2605' },
-  { label: 'Romance',    cmd: 6, color: '#fb923c', icon: '\u2665' },
-  { label: 'Caribbean',  cmd: 7, color: '#34d399', icon: '\u223F' },
-  { label: 'American',   cmd: 8, color: '#ef4444', icon: '\u2691' },
-  { label: 'Sunset',     cmd: 9, color: '#f59e0b', icon: '\u263C' },
-  { label: 'Royal',      cmd: 10, color: '#818cf8', icon: '\u2654' },
+// IntelliBrite / ScreenLogic light commands. The gateway does NOT report the
+// current light mode back, so we persist the last-sent command locally and
+// highlight it as "active".
+const LIGHT_GROUPS = [
+  {
+    title: 'Power',
+    subtitle: 'Turn all IntelliBrite circuits on or off',
+    items: [
+      { label: 'Off', cmd: 0, color: '#64748b', icon: '\u25CB' },
+      { label: 'On',  cmd: 1, color: '#facc15', icon: '\u2600' },
+    ],
+  },
+  {
+    title: 'Solid Colors',
+    subtitle: 'Hold a single color (requires lights on)',
+    items: [
+      { label: 'Blue',   cmd: 13, color: '#3b82f6', icon: '\u25CF' },
+      { label: 'Green',  cmd: 14, color: '#22c55e', icon: '\u25CF' },
+      { label: 'Red',    cmd: 15, color: '#ef4444', icon: '\u25CF' },
+      { label: 'White',  cmd: 16, color: '#f8fafc', icon: '\u25CF' },
+      { label: 'Purple', cmd: 17, color: '#a855f7', icon: '\u25CF' },
+    ],
+  },
+  {
+    title: 'Color Shows',
+    subtitle: 'Pre-programmed animated color scenes',
+    items: [
+      { label: 'Party',     cmd: 5,  color: '#f472b6', icon: '\u2605' },
+      { label: 'Romance',   cmd: 6,  color: '#fb923c', icon: '\u2665' },
+      { label: 'Caribbean', cmd: 7,  color: '#34d399', icon: '\u223F' },
+      { label: 'American',  cmd: 8,  color: '#ef4444', icon: '\u2691' },
+      { label: 'Sunset',    cmd: 9,  color: '#f59e0b', icon: '\u263C' },
+      { label: 'Royal',     cmd: 10, color: '#818cf8', icon: '\u2654' },
+    ],
+  },
+  {
+    title: 'Effects',
+    subtitle: 'Color Set locks a custom palette; Sync aligns multiple lights; Swim cycles through them',
+    items: [
+      { label: 'Color Set',  cmd: 2, color: '#a78bfa', icon: '\u25C9' },
+      { label: 'Color Sync', cmd: 3, color: '#60a5fa', icon: '\u21BB' },
+      { label: 'Color Swim', cmd: 4, color: '#06b6d4', icon: '\u2248' },
+    ],
+  },
+  {
+    title: 'Memory',
+    subtitle: 'Save the current color set, or recall the saved preset',
+    items: [
+      { label: 'Save',   cmd: 11, color: '#10b981', icon: '\u2B50' },
+      { label: 'Recall', cmd: 12, color: '#8b5cf6', icon: '\u21BA' },
+    ],
+  },
 ];
+
+// Flat lookup for label-by-cmd
+const LIGHT_CMD_LABEL = LIGHT_GROUPS.reduce((acc, g) => {
+  g.items.forEach(i => { acc[i.cmd] = i.label; });
+  return acc;
+}, {});
 
 const NAV_ICONS = {
   dashboard: '\u25A3',
-  'pool controls': '\u26A1',
   chlorinator: '\u2662',
   lights: '\u2738',
   schedules: '\u23F0',
@@ -33,6 +79,22 @@ function usePoll(fn, ms) {
     const id = setInterval(fn, ms);
     return () => clearInterval(id);
   }, [fn, ms]);
+}
+
+function useIsMobile(breakpoint = 768) {
+  const query = `(max-width: ${breakpoint - 1}px)`;
+  const [isMobile, setIsMobile] = useState(() => {
+    if (window.matchMedia) return window.matchMedia(query).matches;
+    return window.innerWidth < breakpoint;
+  });
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = (e) => setIsMobile(e.matches);
+    mql.addEventListener('change', onChange);
+    setIsMobile(mql.matches); // sync on mount
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return isMobile;
 }
 
 async function apiGet(path) {
@@ -134,6 +196,11 @@ export default function App() {
   const [chemView, setChemView] = useState('overview'); // overview | history | upload | manual
   const [manualEntry, setManualEntry] = useState({ test_date: new Date().toISOString().split('T')[0] });
   const [chartParam, setChartParam] = useState('free_chlorine');
+  const [activeLightCmd, setActiveLightCmd] = useState(() => {
+    const saved = typeof window !== 'undefined' && window.localStorage?.getItem('poolapp.lastLightCmd');
+    return saved != null && saved !== '' ? parseInt(saved, 10) : null;
+  });
+  const isMobile = useIsMobile();
 
   const showToast = (msg, type = 'info') => {
     setToast({ message: msg, type });
@@ -244,8 +311,12 @@ export default function App() {
     setLoading(l => ({ ...l, lights: true }));
     try {
       const r = await apiPost('lights', { command: cmd });
-      if (r.ok) showToast(r.message);
-      else showToast(r.error, 'error');
+      if (r.ok) {
+        const label = LIGHT_CMD_LABEL[cmd] || `Command ${cmd}`;
+        showToast(`Lights: ${label}`);
+        setActiveLightCmd(cmd);
+        try { window.localStorage?.setItem('poolapp.lastLightCmd', String(cmd)); } catch (_) {}
+      } else showToast(r.error, 'error');
     } catch (e) { showToast('Connection error', 'error'); }
     setLoading(l => ({ ...l, lights: false }));
   };
@@ -284,6 +355,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
       fontFamily: "'Inter', -apple-system, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
@@ -298,10 +370,42 @@ export default function App() {
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+        @media (max-width: 767px) {
+          .grid-2col { grid-template-columns: 1fr !important; }
+          .grid-4col { grid-template-columns: repeat(2, 1fr) !important; }
+          .grid-auto-fill { grid-template-columns: repeat(2, 1fr) !important; }
+          .schedule-grid { grid-template-columns: 40px 1fr 1fr 70px !important; }
+          .schedule-time-col, .schedule-days-col { display: none !important; }
+        }
       `}</style>
 
-      {/* ── Sidebar ── */}
-      <nav style={{
+      {/* ── Mobile Header ── */}
+      {isMobile && <div style={{ display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px', paddingTop: 'env(safe-area-inset-top, 12px)',
+        background: '#020617', borderBottom: '1px solid #1e293b',
+        position: 'sticky', top: 0, zIndex: 50,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="28" height="28" viewBox="0 0 64 64" style={{ borderRadius: 7 }}>
+            <rect width="64" height="64" rx="12" fill="#0ea5e9"/>
+            <path d="M8 30 Q16 24 24 30 Q32 36 40 30 Q48 24 56 30" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round"/>
+            <path d="M8 42 Q16 36 24 42 Q32 48 40 42 Q48 36 56 42" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round"/>
+          </svg>
+          <span style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 700 }}>Pool Control</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%',
+            background: status ? '#4ade80' : '#f59e0b',
+            boxShadow: status ? '0 0 8px #4ade80' : '0 0 8px #f59e0b' }} />
+          <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace" }}>
+            {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Connecting...'}
+          </span>
+        </div>
+      </div>}
+
+      {/* ── Sidebar (Desktop) ── */}
+      {!isMobile && <nav style={{
         width: 230, minHeight: '100vh', padding: '20px 14px',
         background: '#020617',
         borderRight: '1px solid #1e293b',
@@ -333,7 +437,7 @@ export default function App() {
 
         {/* Nav items */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {['dashboard','pool controls','chlorinator','lights','schedules','water chemistry','alerts'].map(t => (
+          {['dashboard','chlorinator','lights','schedules','water chemistry','alerts'].map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               background: activeTab === t ? '#2563eb' : 'transparent',
               border: 'none',
@@ -366,17 +470,19 @@ export default function App() {
             IC40 &middot; v5.2 b738
           </div>
         </div>
-      </nav>
+      </nav>}
 
       {/* ── Main Content ── */}
-      <main style={{ flex: 1, padding: '24px 32px', overflowY: 'auto', minHeight: '100vh' }}>
+      <main className="main-content" style={{ flex: 1, padding: isMobile ? '16px' : '24px 32px',
+        paddingBottom: isMobile ? 80 : undefined,
+        overflowY: 'auto', minHeight: isMobile ? undefined : '100vh' }}>
         <div style={{ maxWidth: 1000 }}>
 
         {/* ─── DASHBOARD ─── */}
         {activeTab === 'dashboard' && (
           <div>
             {/* Top metrics row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div className="grid-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
               <Metric label="Air Temp" value={sys.airTemp ?? '--'} unit="&deg;F" />
               <Metric label="Pool Temp" value={pool?.currentTemp ?? '--'} unit="&deg;F"
                 color={pool?.currentTemp > 80 ? '#22d3ee' : undefined} />
@@ -386,7 +492,7 @@ export default function App() {
             </div>
 
             {/* Main grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+            <div className="grid-2col" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
 
               {/* Pool gauge card */}
               <div style={{ background: '#1e293b', border: '1px solid #334155',
@@ -479,7 +585,7 @@ export default function App() {
             </div>
 
             {/* Bottom row: System + Chlorinator */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+            <div className="grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
               <div style={{ background: '#1e293b', border: '1px solid #334155',
                 borderRadius: 12, padding: '16px 18px' }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
@@ -524,72 +630,113 @@ export default function App() {
           </div>
         )}
 
-        {/* ─── CIRCUITS ─── */}
-        {activeTab === 'pool controls' && (
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>
-              Pool Controls</h2>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
-              {circuits.length} circuits &middot; {circuits.filter(c => c.isOn).length} active</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-              {circuits.map(c => {
-                const on = c.isOn;
-                return (
-                  <button key={c.id} onClick={() => toggleCircuit(c.id, on ? 0 : 1)}
-                    disabled={loading[c.id]}
-                    style={{
-                      background: on ? '#1e3a5f' : '#1e293b',
-                      border: `1px solid ${on ? '#2563eb' : '#334155'}`,
-                      borderRadius: 10, padding: '14px 16px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      opacity: loading[c.id] ? 0.5 : 1, transition: 'all 0.15s',
-                    }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                        background: on ? '#3b82f6' : '#475569',
-                        boxShadow: on ? '0 0 8px #3b82f6' : 'none' }} />
-                      <span style={{ fontSize: 13, color: on ? '#e2e8f0' : '#94a3b8',
-                        fontWeight: on ? 500 : 400 }}>{c.name}</span>
-                    </div>
-                    <span style={{ fontSize: 10, color: on ? '#93c5fd' : '#64748b',
-                      fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
-                      {on ? 'ON' : 'OFF'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* ─── LIGHTS ─── */}
-        {activeTab === 'lights' && (
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Light Controls</h2>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 24 }}>
-              IntelliBrite color modes</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
-              {LIGHT_COMMANDS.map(lc => (
-                <button key={lc.cmd} onClick={() => sendLightCommand(lc.cmd)}
-                  disabled={loading.lights}
-                  style={{
-                    background: '#1e293b', border: '1px solid #334155',
-                    borderRadius: 12, padding: '18px 12px',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                    transition: 'all 0.15s', opacity: loading.lights ? 0.4 : 1,
-                    position: 'relative', overflow: 'hidden',
-                  }}>
-                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: lc.color,
-                    boxShadow: `0 0 16px ${lc.color}60`, position: 'relative', zIndex: 1 }} />
-                  <span style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 500,
-                    position: 'relative', zIndex: 1 }}>{lc.label}</span>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%',
-                    background: `linear-gradient(to top, ${lc.color}15, transparent)` }} />
-                </button>
+        {activeTab === 'lights' && (() => {
+          const lightCircuits = circuits.filter(c => /light|intellibrite|magicstream/i.test(c.name));
+          const activeLabel = activeLightCmd != null ? LIGHT_CMD_LABEL[activeLightCmd] : null;
+          return (
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Light Controls</h2>
+              <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
+                IntelliBrite commands are broadcast to every IntelliBrite-capable light on the system.
+                {activeLabel ? <> Last mode sent: <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{activeLabel}</span>.</> : null}
+              </p>
+
+              {/* Light circuits on/off */}
+              {lightCircuits.length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
+                    textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10,
+                    fontFamily: "'JetBrains Mono', monospace" }}>Light Circuits</div>
+                  <div style={{ display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+                    {lightCircuits.map(c => {
+                      const on = c.isOn;
+                      return (
+                        <button key={c.id} onClick={() => toggleCircuit(c.id, on ? 0 : 1)}
+                          disabled={loading[c.id]}
+                          style={{
+                            background: on ? '#1e3a5f' : '#1e293b',
+                            border: `1px solid ${on ? '#2563eb' : '#334155'}`,
+                            borderRadius: 10, padding: '14px 16px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            opacity: loading[c.id] ? 0.5 : 1, transition: 'all 0.15s',
+                          }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                              background: on ? '#3b82f6' : '#475569',
+                              boxShadow: on ? '0 0 8px #3b82f6' : 'none' }} />
+                            <span style={{ fontSize: 13, color: on ? '#e2e8f0' : '#94a3b8',
+                              fontWeight: on ? 500 : 400 }}>{c.name}</span>
+                          </div>
+                          <span style={{ fontSize: 10, color: on ? '#93c5fd' : '#64748b',
+                            fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
+                            {on ? 'ON' : 'OFF'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Command groups */}
+              {LIGHT_GROUPS.map(group => (
+                <div key={group.title} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
+                    textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4,
+                    fontFamily: "'JetBrains Mono', monospace" }}>{group.title}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>{group.subtitle}</div>
+                  <div style={{ display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                    {group.items.map(lc => {
+                      const active = activeLightCmd === lc.cmd;
+                      return (
+                        <button key={lc.cmd} onClick={() => sendLightCommand(lc.cmd)}
+                          disabled={loading.lights}
+                          title={`Send IntelliBrite command ${lc.cmd} (${lc.label})`}
+                          style={{
+                            background: active ? '#1e3a5f' : '#1e293b',
+                            border: `1px solid ${active ? lc.color : '#334155'}`,
+                            boxShadow: active ? `0 0 0 1px ${lc.color}55, 0 0 20px ${lc.color}30` : 'none',
+                            borderRadius: 12, padding: '16px 10px',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                            transition: 'all 0.15s', opacity: loading.lights ? 0.4 : 1,
+                            position: 'relative', overflow: 'hidden', cursor: 'pointer',
+                          }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: lc.color,
+                            boxShadow: `0 0 14px ${lc.color}70`,
+                            border: lc.label === 'White' ? '1px solid #cbd5e1' : 'none',
+                            position: 'relative', zIndex: 1 }} />
+                          <span style={{ fontSize: 12,
+                            color: active ? '#f1f5f9' : '#cbd5e1',
+                            fontWeight: active ? 600 : 500,
+                            position: 'relative', zIndex: 1 }}>{lc.label}</span>
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%',
+                            background: `linear-gradient(to top, ${lc.color}${active ? '25' : '12'}, transparent)` }} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
+
+              {/* Help note */}
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+                padding: '14px 16px', marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1',
+                  textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6,
+                  fontFamily: "'JetBrains Mono', monospace" }}>How IntelliBrite Works</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+                  <li>Solid colors and scenes only take effect while the lights are <strong style={{ color: '#e2e8f0' }}>on</strong>.</li>
+                  <li>Commands are sent to <em>every</em> IntelliBrite light; the controller has no way to target one fixture.</li>
+                  <li>Pentair's gateway doesn't report the current light mode back, so the highlighted button reflects the last command you sent from this device.</li>
+                  <li>Switching modes can take 10&ndash;20&nbsp;seconds as the lights cycle off/on to sync.</li>
+                </ul>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ─── CHLORINATOR ─── */}
         {activeTab === 'chlorinator' && (
@@ -599,7 +746,7 @@ export default function App() {
               IC40 Salt Chlorine Generator</p>
 
             {chlorData ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+              <div className="grid-2col" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
                 {/* Pool Output Gauge (left) */}
                 {(() => {
                   const pct = (chlorData.poolOutput || 0) / 100;
@@ -737,7 +884,7 @@ export default function App() {
             {schedulesData && schedulesData.schedules.length > 0 && (
               <div>
                 {/* Table header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
+                <div className="schedule-grid" style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
                   gap: 8, padding: '0 16px 10px', alignItems: 'center' }}>
                   {['', 'Circuit', 'Start', 'Stop', 'Days', 'Status'].map((h, i) => (
                     <div key={i} style={{ fontSize: 10, color: '#94a3b8',
@@ -760,7 +907,7 @@ export default function App() {
                     };
 
                     return (
-                      <div key={s.id} style={{
+                      <div key={s.id} className="schedule-grid" style={{
                         display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 1fr 70px',
                         gap: 8, padding: '14px 16px', alignItems: 'center',
                         background: s.isActive ? '#1e3a5f' : '#1e293b',
@@ -782,19 +929,19 @@ export default function App() {
                         </div>
 
                         {/* Start */}
-                        <div style={{ fontSize: 13, color: '#cbd5e1',
+                        <div className="schedule-time-col" style={{ fontSize: 13, color: '#cbd5e1',
                           fontFamily: "'JetBrains Mono', monospace" }}>
                           {fmtTime(startH, startM)}
                         </div>
 
                         {/* Stop */}
-                        <div style={{ fontSize: 13, color: '#cbd5e1',
+                        <div className="schedule-time-col" style={{ fontSize: 13, color: '#cbd5e1',
                           fontFamily: "'JetBrains Mono', monospace" }}>
                           {fmtTime(stopH, stopM)}
                         </div>
 
                         {/* Days */}
-                        <div style={{ display: 'flex', gap: 3 }}>
+                        <div className="schedule-days-col" style={{ display: 'flex', gap: 3 }}>
                           {['M','T','W','T','F','S','S'].map((d, i) => {
                             const dayBits = [1, 2, 4, 8, 16, 32, 64];
                             const isOn = !!(s.dayMask & dayBits[i]);
@@ -839,13 +986,15 @@ export default function App() {
         {/* ─── WATER CHEMISTRY ─── */}
         {activeTab === 'water chemistry' && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center',
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between', gap: isMobile ? 12 : 0, marginBottom: 20 }}>
               <div>
                 <h2 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Water Chemistry</h2>
                 <p style={{ fontSize: 12, color: '#94a3b8' }}>
                   {chemData?.tests?.length || 0} test results on record</p>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {['overview', 'history', 'upload', 'manual'].map(v => (
                   <button key={v} onClick={() => setChemView(v)} style={{
                     background: chemView === v ? '#2563eb' : '#1e293b',
@@ -868,7 +1017,7 @@ export default function App() {
                     </div>
 
                     {/* Parameter cards — use live salt from chlorinator if not stored in test */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
+                    <div className="grid-auto-fill" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
                       {Object.entries(chemData.idealRanges || {}).map(([key, range]) => {
                         let val = chemData.latest[key];
                         if (val == null && key === 'salt' && chlorData?.saltPPM) val = chlorData.saltPPM;
@@ -1092,7 +1241,7 @@ export default function App() {
                           </div>
 
                           {/* Parameter toggles */}
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginBottom: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: isMobile ? 8 : 18, marginBottom: 6, flexWrap: 'wrap' }}>
                             {PARAMS.map(p => {
                               const isActive = p.key === chartParam;
                               return (
@@ -1101,7 +1250,7 @@ export default function App() {
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                                     transition: 'transform 0.15s', transform: isActive ? 'scale(1.08)' : 'scale(1)' }}>
                                   <div style={{
-                                    width: 54, height: 54, borderRadius: '50%',
+                                    width: isMobile ? 40 : 54, height: isMobile ? 40 : 54, borderRadius: '50%',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     background: isActive ? p.color : 'transparent',
                                     border: `2.5px solid ${isActive ? p.color : p.color + '55'}`,
@@ -1359,6 +1508,39 @@ export default function App() {
 
         </div>
       </main>
+
+      {/* ── Mobile Bottom Nav ── */}
+      {isMobile && <nav style={{ display: 'flex',
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: '#020617', borderTop: '1px solid #1e293b',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        zIndex: 50, justifyContent: 'space-around', alignItems: 'center',
+      }}>
+        {[
+          { key: 'dashboard', icon: NAV_ICONS.dashboard, label: 'Home' },
+          { key: 'chlorinator', icon: NAV_ICONS.chlorinator, label: 'Chlor' },
+          { key: 'lights', icon: NAV_ICONS.lights, label: 'Lights' },
+          { key: 'water chemistry', icon: NAV_ICONS['water chemistry'], label: 'Chemistry' },
+          { key: 'alerts', icon: NAV_ICONS.alerts, label: 'Alerts' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+            background: 'none', border: 'none', padding: '8px 4px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            color: activeTab === t.key ? '#3b82f6' : '#64748b',
+            minWidth: 52, position: 'relative',
+          }}>
+            <span style={{ fontSize: 18 }}>{t.icon}</span>
+            <span style={{ fontSize: 9, fontWeight: 600,
+              fontFamily: "'Inter', sans-serif" }}>{t.label}</span>
+            {t.key === 'alerts' && alertCount > 0 && (
+              <span style={{ position: 'absolute', top: 4, right: 6,
+                width: 14, height: 14, borderRadius: '50%', background: '#ef4444',
+                fontSize: 8, fontWeight: 700, color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{alertCount}</span>
+            )}
+          </button>
+        ))}
+      </nav>}
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
